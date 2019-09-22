@@ -1,7 +1,6 @@
 virtualenv
 .idea/*__pycache__
 *.pyc
-
 .idea/*.*ml
 .idea/.name
 *.txt
