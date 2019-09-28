@@ -150,7 +150,8 @@ def parse_arguments():
         game files that are set to true in config file for game version and
         disc(s) specified. CDPatch is set to extract mode by default. For 
         insertion, cdpatch must be used for all XA and IKI files, but will
-        not work for files larger than the original.''')
+        not work for files larger than the original.''', help='''Calls
+        cdpatch executable on discs listed''')
 
     # Positional argument
     parser_cd.add_argument('version', help='''Game version to extract/insert
@@ -170,7 +171,8 @@ def parse_arguments():
         description='''Wrapper for CUE's psx-mode2 utility. Inserts game
         files that are set to true in config file for game version and
         disc(s) specified. Works for files larger than the original, 
-        but will not insert XA and IKI files correctly.''')
+        but will not insert XA and IKI files correctly.''', help='''Calls
+        psx-mode2 on discs listed''')
 
     # Positional arguments
     parser_ps.add_argument('version', help='Game version to insert files into')
