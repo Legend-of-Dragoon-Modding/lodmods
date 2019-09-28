@@ -19,6 +19,9 @@ update_tags.py
 *.csv
 delete.py
 *.bin*
+*.spec
+*.ico
 build
 source
 Makefile
+dist
