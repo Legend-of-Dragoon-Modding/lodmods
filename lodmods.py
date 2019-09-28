@@ -734,6 +734,8 @@ if __name__ == '__main__':
             args.file_category = ''.join(('[', args.file_category.upper(), ']'))
             args.insert_all_from_list(file, disc_dict, args.file_category,
                                       args.del_component_folders)
+        elif args.func == 'unpack':
+            pass
         elif args.func == 'swap':
             args.file_swap(args.src_file, args.dest_file)
         elif args.func == 'swapall':
