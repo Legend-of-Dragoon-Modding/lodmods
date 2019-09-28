@@ -112,6 +112,20 @@ def parse_arguments():
                         default='lodmods.config', metavar='',
                         help='Configuration file name (default: lodmods.config)')
 
+    # Create subparser for setup command.
+    parser_su = subparsers.add_parser(
+        'setup', usage='%(prog)s version_1 version_2 ...',
+        description='''Goes through the setup process to set the disc
+        directory paths and disc names for each of the versions listed.
+        By default, lodmods.config is used, but other configs can specified
+        as an option to the main executable.''',
+        help='Set up a LODModS config file')
+
+    # Positional arguments
+    parser_su.add_argument('version_list', nargs='+',
+                           help='List of all versions to set up')
+    parser_su.set_defaults(config_setup=config_setup)
+
     # Create subparser for backup command.
     parser_b = subparsers.add_parser(
         'backup', usage='%(prog)s file [-r]', description='''Creates a backup
@@ -128,17 +142,6 @@ def parse_arguments():
                           help='''Replaces file with backup, if it exists. 
                           (default: False)''',)
     parser_b.set_defaults(file_backup=backup_file)
-
-    # Create subparser for setup command.
-    parser_su = subparsers.add_parser('setup', usage='%(prog)s version_1 version_2 ...',
-                                      description='''Goes through the setup process to
-                                      set the disc directory paths and disc names for
-                                      each of the versions listed.''')
-
-    # Positional arguments
-    parser_su.add_argument('version_list', nargs='+',
-                           help='List of all versions to set up')
-    parser_su.set_defaults(config_setup=config_setup)
 
     # Create subparser for cdpatch command.
     parser_cd = subparsers.add_parser(
@@ -670,12 +673,12 @@ if __name__ == '__main__':
         patch_dir = config_dict['[Modding Directories]']['Patches']
         patch_list = []
 
-        if args.func == 'backup':
+        if args.func == 'setup':
+            args.config_setup(args.config_file, config_dict, args.version_list)
+        elif args.func == 'backup':
             for input_file in args.input_files:
                 print('Backing up %s' % input_file)
                 args.file_backup(input_file, args.restore_from_backup)
-        elif args.func == 'setup':
-            args.config_setup(args.config_file, config_dict, args.version_list)
         elif args.func == 'cdpatch':
             if args.disc[0] == '*':
                 args.disc = ['All Discs', 'Disc 1', 'Disc 2', 'Disc 3', 'Disc 4']
