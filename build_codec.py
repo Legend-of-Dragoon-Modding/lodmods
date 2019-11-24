@@ -1,5 +1,4 @@
-import lod_codec
-import lod_ext_codec
+from encodings import lod_codec, lod_ext_codec
 
 
 def build_codecs():
