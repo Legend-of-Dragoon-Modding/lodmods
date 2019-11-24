@@ -21,13 +21,13 @@ def build_codecs():
                 break
 
         standard_table_end_val = i
-        lod.settables(standard_lookup_table.strip('\n'))
+        lod_codec.settables(standard_lookup_table.strip('\n'))
 
         extended_lookup_table = extended_lookup_table[:i+1]
         for line in font_table:
             extended_lookup_table = ''.join((extended_lookup_table, line[0]))
         else:
-            lod_extended.settables(extended_lookup_table.strip('\n'))
+            lod_ext_codec.settables(extended_lookup_table.strip('\n'))
 
     return standard_table_end_val
 
