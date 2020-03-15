@@ -45,7 +45,7 @@ from disc_handler import backup_file
 MAIN_FILE = re.compile(r'(DRGN0\.bin)|(DRGN1\.bin)(DRGN2[1-4]\.bin)', re.I)
 BPE_FLAG = re.compile(b'^[\x00-\xff]{4}BPE\x1a')
 MRG_FLAG = re.compile(b'^MRG\x1a')
-BLOCK_RANGE_PATTERN = re.compile(r'(\.{\d+-\d+})')
+BLOCK_RANGE_PATTERN = re.compile(r'(_{\d+-\d+})')
 BLOCK_RANGE_DICT = {'BTTL': ('{0-107}',), 'S_BTLD': ('{0-54}', '{0-32}'), 'S_EFFE': ('{0-62}',),
                     'S_INIT': ('{0-4}',), 'S_ITEM': ('{0-73}',), 'S_STRM': ('{0-41}',),
                     'SMAP': ('{0-104}',), 'TEMP': ('{0-11}',), 'TTLE': ('{0-17}',),
@@ -222,7 +222,10 @@ def _decompress(compressed_file, start_block=0, end_block=512, is_subfile=False)
     """
 
     file_name = os.path.realpath(compressed_file.name)
-    meta_dir = os.path.join(os.path.dirname(file_name), 'meta')
+    basename = os.path.splitext(os.path.basename(file_name))
+    bpe_subdir = '_'.join((os.path.splitext(file_name)[0], 'dir'))
+    meta_dir = os.path.join(bpe_subdir, 'meta')
+    os.makedirs(bpe_subdir, exist_ok=True)
     os.makedirs(meta_dir, exist_ok=True)
 
     # Make sure file is BPE, or has BPE subfile if is_subfile specified,
@@ -240,8 +243,10 @@ def _decompress(compressed_file, start_block=0, end_block=512, is_subfile=False)
         print('Decompress: Skipping file')
         return
 
-    decompressed_file_name = ''.join((file_name, '.{', ''.join((str(start_block),
-                                      '-', str(end_block))), '}'))
+    decompressed_file_name = os.path.join(
+        bpe_subdir,
+        ''.join((basename[0], '_{', str(start_block),
+                 '-', str(end_block), '}', basename[1])))
     meta_file = os.path.join(meta_dir, os.path.basename(decompressed_file_name))
 
     compressed_file.read(8)  # file size and BPE
@@ -374,7 +379,7 @@ def _decompress(compressed_file, start_block=0, end_block=512, is_subfile=False)
             os.remove(updated_meta)
         os.rename(decompressed_file_name, updated_name)
         os.rename(meta_file, updated_meta)
-    print('Decompress: File decompressed')
+    print('Decompress: File decompressed\n')
 
 
 def run_decompression(compressed_file, start_block=0, end_block=512, is_subfile=False):
@@ -774,7 +779,8 @@ def _compress(decompressed_file, attempt_num=0, mod_mode=False, is_subfile=False
     meta_file = os.path.join(os.path.dirname(file_name), 'meta',
                              os.path.basename(file_name))
 
-    compressed_file_name = file_name.replace(BLOCK_RANGE_PATTERN.findall(file_name)[-1], '')
+    compressed_file_name = \
+        '.'.join((os.path.dirname(decompressed_file.name)[:-4], 'BIN'))
     backup_file(compressed_file_name)
 
     # Adds byte pairs to dictionary until no pairs exist with count >= 5
@@ -959,18 +965,17 @@ def run_compression(decompressed_file, mod_mode=True, is_subfile=False,
         print('Compress: Skipping file')
         return
 
-    meta_file = os.path.join(os.path.dirname(decompressed_file), 'meta',
-                             os.path.basename(decompressed_file))
-
     # Since compression requires a clean copy of the file, a temp copy
     # is created to replace the main file following failed compressions
     # (size limit not achieved). This is done rather than using the clean
     # backup so that already-modded files can be compressed without losing
     # previous changes.
-    temp = '.'.join((decompressed_file.replace(
-        BLOCK_RANGE_PATTERN.findall(decompressed_file)[-1],
-        ''), 'temp'))
-    shutil.copy(temp.replace('.temp', ''), temp)
+    meta_file = os.path.join(os.path.dirname(decompressed_file), 'meta',
+                             os.path.basename(decompressed_file))
+    compressed_file = \
+        '.'.join((os.path.dirname(decompressed_file)[:-4], 'BIN'))
+    temp = '.'.join((compressed_file, 'temp'))
+    shutil.copy(compressed_file, temp)
 
     with open(decompressed_file, 'rb') as inf:
         if is_subfile or mod_mode:
@@ -1007,13 +1012,13 @@ def run_compression(decompressed_file, mod_mode=True, is_subfile=False,
                     ((os.path.getsize(decompressed_file) > 0x800 and attempts < max_attempts) or
                      (os.path.getsize(decompressed_file) <= 0x800 and attempts <= 5)):
                 attempts += 1
-                shutil.copy(temp, temp.replace('.temp', ''))
+                shutil.copy(temp, compressed_file)
                 inf.seek(0)
                 continue
             elif (is_subfile or mod_mode) and return_vals[0] < return_vals[1] and \
                     ((os.path.getsize(decompressed_file) > 0x800 and attempts >= max_attempts) or
                      (os.path.getsize(decompressed_file) <= 0x800 and attempts > 5)):
-                shutil.copy(temp, temp.replace('.temp', ''))
+                shutil.copy(temp, compressed_file)
                 os.remove(temp)
                 print('Compress: Could not compress subfile to original size')
                 print('Compress: Compression terminated')
@@ -1049,12 +1054,7 @@ def run_compression(decompressed_file, mod_mode=True, is_subfile=False,
     # Delete the temp file, and the decompressed file as well if specified.
     os.remove(temp)
     if delete_decompressed:
-        dir_name = os.path.dirname(decompressed_file)
-        base_name = os.path.basename(decompressed_file)
-        meta_dir = os.path.join(dir_name, 'meta')
-        meta_file = os.path.join(meta_dir, base_name)
-        os.remove(decompressed_file)
-        os.remove(meta_file)
+        os.remove(os.path.dirname(decompressed_file))
 
 
 # MRG handling and file swapping functions + integrated functions
@@ -1317,7 +1317,7 @@ def _extraction_handler(source_file, sector_padding=False, files_to_extract=('*'
     """
 
     # Exit function if file number is '^', which references parent file.
-    if any('^' in sl for sl in files_to_extract):
+    if any('^' in sl[0] for sl in files_to_extract):
         return
 
     if not os.path.exists(source_file):
@@ -1378,12 +1378,8 @@ def extract_all_from_list(list_file, disc_dict, file_category='[ALL]'):
     # categories of the file list txt file. Each category can also be
     # specified individually.
     is_insert = False
-    if file_category == '[ALL]':
-        files_dict = read_file_list(list_file, disc_dict, reverse=is_insert,
-                                    merge_categories=True)
-    else:
-        files_dict = read_file_list(list_file, disc_dict, reverse=is_insert,
-                                    file_category=file_category)
+    files_dict = read_file_list(list_file, disc_dict, reverse=is_insert,
+                                file_category=file_category)
 
     # Call _extraction_handler() on each file entry for each disc for each
     # category (i.e. [PATCH]).
@@ -1391,7 +1387,7 @@ def extract_all_from_list(list_file, disc_dict, file_category='[ALL]'):
     for cat, cat_val in files_dict.items():
         for disc, disc_val in cat_val.items():
             for key in sorted(disc_val.keys(), key=numerical_sort):
-                _extraction_handler(key, disc_val[key][0], disc_val[key][2:])
+                _extraction_handler(key, disc_val[key][0], disc_val[key][1:])
 
     print('\nExtract: Complete')
 
@@ -1736,7 +1732,7 @@ def _insertion_handler(source_file, sector_padding=False, files_to_insert=('*',)
     """
 
     # Exit function if file number is '^', which references parent file.
-    if any('^' in sl for sl in files_to_insert):
+    if any('^' in sl[0] for sl in files_to_insert):
         return
 
     if not os.path.exists(source_file):
@@ -1761,9 +1757,12 @@ def _insertion_handler(source_file, sector_padding=False, files_to_insert=('*',)
         backup_file(source_file, True)
 
         base_name = os.path.basename(source_file)
+        bn_parts = os.path.splitext(base_name)
         for i in files_to_insert:
             block_range = process_block_range(i[0], base_name)
-            dec_file = '.'.join((source_file, block_range))
+            dec_file = os.path.join(
+                source_file.replace('.BIN', '_DIR'),
+                ''.join((bn_parts[0], '_', block_range, bn_parts[1])))
 
             run_compression(dec_file, True, not sector_padding,
                             delete_decompressed=del_subdir)
@@ -1802,12 +1801,8 @@ def insert_all_from_list(list_file, disc_dict, file_category='[ALL]',
     # categories of the file list txt file. Each category can also be
     # specified individually.
     is_insert = True
-    if file_category == '[ALL]':
-        files_list = read_file_list(list_file, disc_dict, reverse=is_insert,
-                                    merge_categories=True)
-    else:
-        files_list = read_file_list(list_file, disc_dict, reverse=is_insert,
-                                    file_category=file_category)
+    files_list = read_file_list(list_file, disc_dict, reverse=is_insert,
+                                file_category=file_category)
 
     # Call _insertion_handler() on each file entry for each disc for each
     # category (i.e. [PATCH]).
@@ -1816,7 +1811,7 @@ def insert_all_from_list(list_file, disc_dict, file_category='[ALL]',
         for disc, disc_val in cat_val.items():
             for key in sorted(disc_val.keys(), key=numerical_sort, reverse=True):
                 _insertion_handler(key, disc_val[key][0],
-                                   disc_val[key][2:], del_subdir)
+                                   disc_val[key][1:], del_subdir)
 
     print('\nInsert: Complete')
 
@@ -1869,7 +1864,7 @@ def unpack_all(source_file):
                      os.walk(dir_to_search) for f in fn]
         for file in file_list:
             # Delete all empty files.
-            if os.path.getsize(file) == 0:
+            if os.path.getsize(file) <= 8:
                 os.remove(file)
                 continue
 
@@ -1888,7 +1883,8 @@ def unpack_all(source_file):
             elif BPE_FLAG.match(header):
                 run_decompression(file)
                 os.remove(file)
-                shutil.rmtree(os.path.join(os.path.dirname(file), 'meta'))
+                bpe_subdir = '_'.join((os.path.splitext(file)[0], 'dir'))
+                shutil.rmtree(os.path.join(bpe_subdir, 'meta'))
                 finished = False
             else:
                 continue
@@ -1961,10 +1957,8 @@ def swap_all_from_list(list_file, disc_dict_pair, del_src_dir=False):
 
     # Read [SWAP] category of file lists for both source and
     # destination game versions.
-    src_files_list = read_file_list(list_file, disc_dict_pair[0],
-                                    file_category='[SWAP]')['[SWAP]']
-    dst_files_list = read_file_list(list_file, disc_dict_pair[1],
-                                    file_category='[SWAP]')['[SWAP]']
+    src_files_list = read_file_list(list_file, disc_dict_pair[0], file_category='[SWAP]')['[SWAP]']
+    dst_files_list = read_file_list(list_file, disc_dict_pair[1], file_category='[SWAP]')['[SWAP]']
 
     files_to_swap = []
     total_files = 0

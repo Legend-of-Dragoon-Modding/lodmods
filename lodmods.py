@@ -10,14 +10,15 @@ import os
 import sys
 from config_handler import read_config, config_setup  # update_file_list
 from disc_handler import backup_file, cdpatch, psxmode
-from game_file_handler import extract_files, extract_all_from_list, insert_files, \
-    insert_all_from_list, file_swap, swap_all_from_list, run_decompression, run_compression
+from game_file_handler import extract_files, extract_all_from_list, insert_files,\
+    insert_all_from_list, file_swap, swap_all_from_list, run_decompression,\
+    run_compression, unpack_all
+from id_files import id_file_type
 """import copy
 import glob
 import re
 import shutil
 import traceback
-from id_dlg import find_dlg_from_file, find_hex_pattern, find_dlg_in_assets
 from dump_insert import dump_script, dump_all, insert_script, insert_all
 from csv_converter import scripts_to_csv, csv_to_scripts
 from lod_patcher import update_mod_list, create_patches, patch"""
@@ -269,31 +270,39 @@ def parse_arguments():
                            help='''Specify output file for text locations
                            (default: %s\\output.txt)''' %
                            os.path.dirname(os.path.realpath(sys.argv[0])))
-    parser_ff.set_defaults(find_dlg_from_file=find_dlg_from_file)
+    parser_ff.set_defaults(find_dlg_from_file=find_dlg_from_file)"""
 
-    # create subparser for findhex command
-    parser_fh = subparsers.add_parser('findhex',
-                                      usage='%(prog)s [-o output_file] '
-                                      'target_folder',
-                                      description='''Identifies all files that
-                                      contain text and outputs their names to
-                                      the specified location. Does not provide
-                                      information on what text is included
-                                      in which file. Use finddlg to locate
-                                      specific text.''',
-                                      help='''Find files containing instances
-                                      of text end token''')
+    # create subparser for idfiles command
+    parser_id = subparsers.add_parser('idfiles',
+                                      usage='%(prog)s dir_to_search [-t file_type]'
+                                            '[-p header_pattern] [-o output_file]',
+                                      description='''Identifies all files that 
+                                      contain the header type or hex pattern
+                                      specified and outputs the file list to 
+                                      either console or a text file. Currently 
+                                      known file types are BPE, MRG, TIM, TMD, and
+                                      TEXT. header_pattern should only be used if
+                                      file_type is set to None (i.e. the file type
+                                      is not known for certain yet).''',
+                                      help='''Find files containing specified 
+                                      header or byte pattern.''')
 
     # positional argument
-    parser_fh.add_argument('folder', help='Specify folder to search')
+    parser_id.add_argument('dir_to_search', help='Specify folder to search')
 
     # optional arguments
-    parser_fh.add_argument('-o', '--out', dest='output', default=None,
+    parser_id.add_argument('-t', '--type', dest='file_type', default=None,
+                           metavar='', help='''Specify file type from list to
+                           search for (default: None)''')
+    parser_id.add_argument('-p', '--pattern', dest='header_pattern', default=None,
+                           metavar='', help='''Hex pattern to search for
+                           (default: None)''')
+    parser_id.add_argument('-o', '--out', dest='output_file', default=None,
                            metavar='', help='''Specify output file for text
                            locations (prints to console by default)''')
-    parser_fh.set_defaults(find_hex_pattern=find_hex_pattern)
+    parser_id.set_defaults(id_file_type=id_file_type)
 
-    # create subparser for findassets command
+    """# create subparser for findassets command
     parser_fa = subparsers.add_parser('findassets',
                                      usage='%(prog)s input_file',
                                      description='''Uses text document list
@@ -389,7 +398,7 @@ def parse_arguments():
     parser_el.add_argument(
         '-c', '--category', dest='file_category', default='all', metavar='',
         help='''Category of files to extract from list file (default: extract
-        all files''')
+        all files)''')
     parser_el.set_defaults(extract_all_from_list=extract_all_from_list)
 
     # Create subparser for infromlist command.
@@ -412,12 +421,27 @@ def parse_arguments():
     # Optional arguments
     parser_il.add_argument('-c', '--category', dest='file_category', default='all',
                            metavar='', help='''Category of files to insert from list file
-                           (default: insertt all files''')
+                           (default: insert all files''')
     parser_il.add_argument('-d', '--delete', action='store_true',
                            dest='del_component_folders', help='''Indicate whether
                            to delete folders containing files that were inserted
                            (default: False)''')
     parser_il.set_defaults(insert_all_from_list=insert_all_from_list)
+
+    # Create subparser for unpack command.
+    parser_u = subparsers.add_parser(
+        'unpack', usage='%(prog)s source_file', description='''Disassembles
+        the given MRG source file into its bottom-level component files.
+        This function also deletes all intermediary files, so that the 
+        created folder can be used with the id_file_type function to
+        generate a file list text file of all bottom-level files of the
+        searched file type. Unpack should not be used for normal file
+        extraction, due to the removal of intermediary files.''',
+        help='Disassembles MRG file into its bottom-level component files')
+
+    # Positional argument
+    parser_u.add_argument('source_file', help='MRG file to unpack')
+    parser_u.set_defaults(unpack_all=unpack_all)
 
     # Create subparser for swap command.
     parser_s = subparsers.add_parser(
@@ -735,7 +759,7 @@ if __name__ == '__main__':
             args.insert_all_from_list(file, disc_dict, args.file_category,
                                       args.del_component_folders)
         elif args.func == 'unpack':
-            pass
+            args.unpack_all(args.source_file)
         elif args.func == 'swap':
             args.file_swap(args.src_file, args.dest_file)
         elif args.func == 'swapall':
@@ -757,6 +781,9 @@ if __name__ == '__main__':
                              config_dict['[Game Discs]'][version][disc][1]]]
                 disc_dict_pair.append(disc_dict)
             args.file_swap_from_list(list_file, disc_dict_pair, args.del_src_dir)
+        elif args.func == 'idfiles':
+            args.id_file_type(args.dir_to_search, args.file_type,
+                              args.header_pattern, args.output_file)
         """elif args.func == 'finddlg':
             args.find_dlg_from_file(args.folder, args.input_file, args.output_file)
         elif args.func == 'findhex':
@@ -912,7 +939,7 @@ if __name__ == '__main__':
             except SystemExit:
                 pass
             finally:
-                block_range_pattern = re.compile('(\.{\d+-\d+})')
+                block_range_pattern = re.compile(r'(\.{\d+-\d+})')
                 for patch in patch_list:
                     backup = '.'.join((patch, 'orig'))
                     if block_range_pattern.search(patch) and os.path.exists(backup):

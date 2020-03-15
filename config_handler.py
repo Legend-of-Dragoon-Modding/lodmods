@@ -160,7 +160,7 @@ def _check_for_duplicates(file_list_dict):
                     # in the dup_test_list. If it does, add it to the dup_file_dict for
                     # the appropriate parent file. At the end, append each popped item
                     # to dup_test_list.
-                    for l in range(len(i[:])):
+                    for item_list in range(len(i[:])):
                         item = i.pop()
                         if '-' in item:
                             range_list = [str(x) for x in range(int(item.split('-')[0]),
@@ -483,8 +483,8 @@ def config_setup(config_file, config_dict, version_list, called_by_patcher=False
     update_config(config_file, config_dict)
 
 
-def read_file_list(list_file, disc_dict, reverse=False, merge_categories=False,
-                   file_category='[ALL]', check_duplicates=False):
+def read_file_list(list_file, disc_dict, reverse=False, file_category='[ALL]',
+                   check_duplicates=False):
     """
     Read file list txt file to a dict.
 
@@ -510,9 +510,6 @@ def read_file_list(list_file, disc_dict, reverse=False, merge_categories=False,
     reverse : boolean
         Flag to reverse sort order of subfiles (necessary when inserting
         files). (default: False)
-    merge_categories : boolean
-        Flag to merge separate [] list file categories into single [ALL]
-        category. (default: False)
     file_category : str
         Category from list file to add to file_list_dict (default: [ALL]).
     check_duplicates : boolean
@@ -548,12 +545,10 @@ def read_file_list(list_file, disc_dict, reverse=False, merge_categories=False,
                 params = [x.strip() for x in line.split('\t')]
                 try:
                     source_file = os.path.join(disc_dict[disc_num][1][0],
-                                               params[-3].replace('@', ''))
-                    file_list_dict[category][disc_num][source_file][0] = int(params[-2])
-                    file_list_dict[category][disc_num][source_file][1] = int(params[-1])
+                                               params[0].replace('@', ''))
+                    file_list_dict[category][disc_num][source_file][0] = int(params[1])
                 except KeyError:
-                    file_list_dict[category][disc_num][source_file] = [int(params[-2]),
-                                                                       int(params[-1])]
+                    file_list_dict[category][disc_num][source_file] = [int(params[1])]
             else:
                 try:
                     file_list_dict[category][disc_num][source_file].append(
@@ -587,7 +582,7 @@ def read_file_list(list_file, disc_dict, reverse=False, merge_categories=False,
                 sys.exit(4)
 
     # If specified, merge all file categories into a single [ALL] category.
-    if merge_categories:
+    if file_category == '[ALL]':
         file_list_dict = {'[ALL]': reduce(
             _merge_dicts, [val for key, val in file_list_dict.items()])}
 
@@ -609,6 +604,39 @@ def read_file_list(list_file, disc_dict, reverse=False, merge_categories=False,
                 file_list_dict[cat][disc][key] = val
 
     return file_list_dict
+
+
+def write_file_list(output_file, file_list_dict, file_path=None):
+    """
+    Writes file list text file.
+
+    Loops through file list dictionary and outputs formatted file list
+    text file.
+
+    output_file : str
+        Name of text file to output
+    file_list_dict : OrderedDict
+        Dict of games files to write to text file
+    """
+
+    if file_path is not None:
+        file_path = ''.join((file_path, os.sep))
+
+    with open(output_file, 'w') as f:
+        for cat, cat_val in file_list_dict.items():
+            f.write(''.join((cat, '\n')))
+            for disc, disc_val in cat_val.items():
+                f.write(''.join(('#', disc, '\n')))
+                for entry, entry_val in disc_val.items():
+                    if file_path is not None:
+                        entry = ''.join(('@', entry.replace(file_path, '')))
+                    f.write(''.join((entry, '\t', str(entry_val[0]), '\n')))
+                    for item in entry_val[1]:
+                        item = [str(x) for x in item]
+                        f.write('\t'.join(item))
+                        f.write('\n')
+                    else:
+                        f.write('\n')
 
 
 def update_file_list(list_file, config_dict, disc_dict):
@@ -665,16 +693,4 @@ def update_file_list(list_file, config_dict, disc_dict):
 
     # Write the new file list dict to the specified list file with
     # proper formatting.
-    with open(list_file, 'w') as f:
-        for cat, cat_val in mods_file_dict.items():
-            f.write(''.join((cat, '\n')))
-            for disc, disc_val in cat_val.items():
-                f.write(''.join(('#', disc, '\n')))
-                for entry, entry_val in disc_val.items():
-                    f.write(''.join(('@', entry, '\t', str(entry_val[0]),
-                                     '\t', str(entry_val[1]), '\n')))
-                    for item in entry_val[2:]:
-                        f.write('\t'.join(item))
-                        f.write('\n')
-                    else:
-                        f.write('\n')
+    write_file_list(list_file, mods_file_dict)

@@ -1,7 +1,24 @@
-from encodings import lod_codec, lod_ext_codec
+"""Builds text codecs from custom txt file.
+
+Copyright (C) 2019 theflyingzamboni
+"""
+
+import codecs
+import lod_codec
+import lod_ext_codec
 
 
 def build_codecs():
+    try:
+        codecs.lookup('lod_codec')
+    except LookupError:
+        codecs.register('lod_codec')
+
+    try:
+        codecs.lookup('lod_ext_codec')
+    except LookupError:
+        codecs.register('lod_ext_codecs')
+
     with open('lod.tbl', 'r') as font_table:
         standard_lookup_table = ''
         extended_lookup_table = ''
