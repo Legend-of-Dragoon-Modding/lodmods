@@ -47,6 +47,11 @@ def getregentry():
     )
 
 
+def custom_search(encoding_name):
+    return codecs.CodecInfo(name='lod', encode=Codec().encode,
+                            decode=Codec().decode)
+
+
 def settables(lookup_table):
     global decoding_table
     global encoding_table

@@ -9,15 +9,9 @@ import lod_ext_codec
 
 
 def build_codecs():
-    try:
-        codecs.lookup('lod_codec')
-    except LookupError:
-        codecs.register('lod_codec')
+    codecs.register(lod_codec.custom_search)
 
-    try:
-        codecs.lookup('lod_ext_codec')
-    except LookupError:
-        codecs.register('lod_ext_codecs')
+    codecs.register(lod_ext_codec.getregentry)
 
     with open('lod.tbl', 'r') as font_table:
         standard_lookup_table = ''

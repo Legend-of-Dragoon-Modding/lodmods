@@ -345,7 +345,7 @@ def get_disc_dir(version, required=True):
     Returns
     -------
     str, str list
-        Returns the name of the directory oontaining the disc images
+        Returns the name of the directory containing the disc images
         and a list of the image file names.
     """
 
@@ -372,8 +372,6 @@ def get_disc_dir(version, required=True):
             for ext in ('*.iso', '*.bin', '*.img'):
                 disc_list.extend([os.path.basename(x) for x in
                                   glob.glob(os.path.join(version_dir, ext))])
-            """disc_list = [disc for disc in disc_list if (
-                    'lod' in disc.lower() or 'dragoon' in disc.lower())]"""
             if len(disc_list) < 4:
                 print('Could not find four disc images in %s.\n'
                       'Make sure folder is correct and that all images '

@@ -33,7 +33,7 @@ Copyright (C) 2019 theflyingzamboni
 import colorama
 import glob
 import multiprocessing
-import more_itertools
+from more_itertools import sort_together
 import os
 import random
 import re
@@ -778,9 +778,9 @@ def _compress(decompressed_file, attempt_num=0, mod_mode=False, is_subfile=False
     file_name = os.path.realpath(decompressed_file.name)
     meta_file = os.path.join(os.path.dirname(file_name), 'meta',
                              os.path.basename(file_name))
-
+    extension = os.path.splitext(decompressed_file.name)[1]
     compressed_file_name = \
-        '.'.join((os.path.dirname(decompressed_file.name)[:-4], 'BIN'))
+        os.path.dirname(decompressed_file.name).replace('_DIR', extension)
     backup_file(compressed_file_name)
 
     # Adds byte pairs to dictionary until no pairs exist with count >= 5
@@ -972,8 +972,9 @@ def run_compression(decompressed_file, mod_mode=True, is_subfile=False,
     # previous changes.
     meta_file = os.path.join(os.path.dirname(decompressed_file), 'meta',
                              os.path.basename(decompressed_file))
+    extension = os.path.splitext(decompressed_file)[1]
     compressed_file = \
-        '.'.join((os.path.dirname(decompressed_file)[:-4], 'BIN'))
+        os.path.dirname(decompressed_file).replace('_DIR', extension)
     temp = '.'.join((compressed_file, 'temp'))
     shutil.copy(compressed_file, temp)
 
@@ -1140,7 +1141,7 @@ class LBATable:
             curr_offset += 0x08
 
         self.file_locs, self.file_sizes, self.ptr_locs = \
-            more_itertools.sort_together(
+            sort_together(
                 [self.file_locs, self.file_sizes, self.ptr_locs], key_list=(0, 1))
         self.file_locs, self.file_sizes, self.ptr_locs = \
             list(self.file_locs), list(self.file_sizes), list(self.ptr_locs)
@@ -1761,7 +1762,7 @@ def _insertion_handler(source_file, sector_padding=False, files_to_insert=('*',)
         for i in files_to_insert:
             block_range = process_block_range(i[0], base_name)
             dec_file = os.path.join(
-                source_file.replace('.BIN', '_DIR'),
+                '_'.join((os.path.splitext(source_file)[0], 'DIR')),
                 ''.join((bn_parts[0], '_', block_range, bn_parts[1])))
 
             run_compression(dec_file, True, not sector_padding,
