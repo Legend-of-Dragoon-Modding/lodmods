@@ -1,15 +1,12 @@
 from copy import deepcopy
 import csv
 from more_itertools import sort_together
-import multiprocessing
-import mmap
 import os
 import re
 import struct
 import sys
 from build_codec import *
 from config_handler import read_file_list
-from disc_handler import backup_file
 from game_file_handler import process_block_range
 
 is_insert = False
@@ -128,20 +125,26 @@ class PointerTable:
 
     Attributes
     ----------
-    ptrs : int list
+    ptrs : list
         List of pointer values.
-    ptr_locs : int list
+    ptr_locs : list
         List of pointer offset locations in file.
-    tbl_starts : int list
+    tbl_starts : list
         List of starting offsets of pointer tables.
-    hi_bytes : int list
+    hi_bytes : list
         List of high bytes for absolute pointers (e.g. 0x80000000).
-    offset_diffs : int list
+    offset_diffs : list
         List of differences between starts of tables in RAM and in file
         for absolute pointers.
-    txt_starts : int list
+    txt_starts : list
         List of starting offsets of text blocks corresponding to tables
         of absolute pointers.
+    box_ptrs : list
+        List of box pointer values.
+    box_ptr_locs : list
+        List of box pointer offset locations in file.
+    box_tbl_starts : list
+        List of starting offsets of pointer tables.
     """
 
     def __init__(self):
@@ -151,12 +154,16 @@ class PointerTable:
         self.hi_bytes = []
         self.offset_diffs = []
         self.txt_starts = []
+        self.box_ptrs = []
+        self.box_ptr_locs = []
+        self.box_tbl_starts = []
 
     def __len__(self):
         return len(self.ptrs)
 
     def append_attributes(self, ptr=None, ptr_loc=None, tbl_start=None,
-                          hi_byte=None, offset_diff=None, txt_start=None):
+                          hi_byte=None, offset_diff=None, txt_start=None,
+                          box_ptr=None, box_ptr_loc=None, box_tbl_start=None):
         """
         Appends values to all attribute lists.
 
@@ -180,6 +187,12 @@ class PointerTable:
         txt_start : int
             Starting offset of text block corresponding to current pointer
             table of absolute pointers (default: None).
+        box_ptr : int
+            Box pointer value (default: None).
+        box_ptr_loc : int
+            Box pointer offset location in file (default: None).
+        box_tbl_start : int
+            Starting offset of current box pointer table (default: None)
         """
 
         self.ptrs.append(ptr)
@@ -188,6 +201,9 @@ class PointerTable:
         self.hi_bytes.append(hi_byte)
         self.offset_diffs.append(offset_diff)
         self.txt_starts.append(txt_start)
+        self.box_ptrs.append(box_ptr)
+        self.box_ptr_locs.append(box_ptr_loc)
+        self.box_tbl_starts.append(box_tbl_start)
 
     def sort_attributes(self):
         """
@@ -196,16 +212,22 @@ class PointerTable:
         Sort keys are pointer value first, with pointer location as the
         secondary key.
         """
-        self.ptrs, self.ptr_locs, self.tbl_starts, self.hi_bytes, \
-            self.offset_diffs, self.txt_starts = \
+        self.ptrs, self.ptr_locs, self.tbl_starts, self.hi_bytes,\
+            self.offset_diffs, self.txt_starts, self.box_ptrs,\
+            self.box_ptr_locs, self.box_tbl_starts = \
             sort_together(
                 [self.ptrs, self.ptr_locs, self.tbl_starts, self.hi_bytes,
-                 self.offset_diffs, self.txt_starts], key_list=(0, 1))
-        self.ptrs, self.ptr_locs, self.tbl_starts, \
-            self.hi_bytes, self.offset_diffs, self.txt_starts = \
-            list(self.ptrs), list(self.ptr_locs), \
-            list(self.tbl_starts), list(self.hi_bytes), \
-            list(self.offset_diffs), list(self.txt_starts)
+                 self.offset_diffs, self.txt_starts, self.box_ptrs,
+                 self.box_ptr_locs, self.box_tbl_starts], key_list=(0, 1))
+
+        self.ptrs, self.ptr_locs, self.tbl_starts, self.hi_bytes,\
+            self.offset_diffs, self.txt_starts, self.box_ptrs,\
+            self.box_ptr_locs, self.box_tbl_starts = \
+            list(self.ptrs), list(self.ptr_locs),\
+            list(self.tbl_starts), list(self.hi_bytes),\
+            list(self.offset_diffs), list(self.txt_starts),\
+            list(self.box_ptrs), list(self.box_ptr_locs),\
+            list(self.box_tbl_starts)
 
     def write_pointer(self, file, index):
         """
@@ -230,6 +252,10 @@ class PointerTable:
 
         if self.hi_bytes[index] is None:
             new_ptr = (file.tell() - self.tbl_starts[index]) >> 2
+        elif self.hi_bytes[index] & 0x09000000 == 0x09000000:
+            offset_adjustment = self.hi_bytes[index] ^ 0x09000000
+            new_ptr = ((file.tell() - self.tbl_starts[index] + offset_adjustment)
+                       >> 2) | 0x09000000
         elif self.hi_bytes[index] == 0x80000000:
             new_ptr = (file.tell() + self.offset_diffs[index]) \
                       | self.hi_bytes[index]
@@ -249,7 +275,7 @@ def _get_rel_pointers(file, ptr_tbl_starts, ptr_tbl_ends, single_ptr_tbl):
     Reads tables of relative pointers.
 
     Reads pointers used for text in field areas (contained within MRG files
-    in DRGN0, DRGN1, and DRGN2x) into PointerTable objects, then returns them.
+    in DRGN0, DRGN1, and DRGN2x) into PointerTable object, then returns it.
     These pointers are calculated as the relative offset from the start of a
     particular pointer table. The pointer values themselves are shifted left
     two bits (to word-align values) before being added to the table starting
@@ -262,7 +288,7 @@ def _get_rel_pointers(file, ptr_tbl_starts, ptr_tbl_ends, single_ptr_tbl):
     case, the ends of the pointer tables are specified as the offset following
     both the text and box pointer tables.
 
-    Pointer tables are sorted prior to return according to value, so that all
+    The pointer table is sorted prior to return according to value, so that all
     text will be dumped/inserted in the order it occurs, regardless of the
     position of the pointer itself (as these may be out of order relative to
     the text).
@@ -281,12 +307,11 @@ def _get_rel_pointers(file, ptr_tbl_starts, ptr_tbl_ends, single_ptr_tbl):
 
     Returns
     -------
-    (PointerTable, PointerTable)
-        Returns PointerTable objects for text pointers and box pointers
+    PointerTable
+        Returns PointerTable object for text and box pointers
     """
 
-    txt_ptrs = PointerTable()
-    box_ptrs = PointerTable()
+    ptr_tbl = PointerTable()
 
     # Loop through each pointer table in the file.
     for index, start in enumerate(ptr_tbl_starts):
@@ -295,7 +320,7 @@ def _get_rel_pointers(file, ptr_tbl_starts, ptr_tbl_ends, single_ptr_tbl):
         tbl_length = (ptr_tbl_ends[index] - start
                       if single_ptr_tbl[index]
                       else (ptr_tbl_ends[index] - start) // 2)
-        box_ptr_start = start + tbl_length if not single_ptr_tbl[index] else None
+        box_tbl_start = start + tbl_length if not single_ptr_tbl[index] else None
 
         # Loop through current table 4 bytes at a time, calculate the absolute
         # pointer value, then add that, the offset of the pointer, and the start
@@ -304,25 +329,45 @@ def _get_rel_pointers(file, ptr_tbl_starts, ptr_tbl_ends, single_ptr_tbl):
         curr_rel_offset = 0x00
         while curr_rel_offset < tbl_length:
             file.seek(start + curr_rel_offset)
-            ptr = struct.unpack('<i', file.read(4))[0]
-            ptr = (ptr << 2) + start
-            txt_ptrs.append_attributes(ptr, start + curr_rel_offset, start)
+            offset_adjustment = 0x00
+            raw_ptr = file.read(4)
+            if raw_ptr[3] == 0x09:
+                test_bytes = file.read(8)
+                if test_bytes == b'\x49\x00\x00\x00\x38\x01\xc0\x00':
+                    offset_adjustment += 0x28
+                else:
+                    file.seek(file.tell()-0x28)
+                    test_bytes = file.read(12)
+                    if test_bytes ==\
+                            b'\x38\x06\xc6\x00\x00\x00\x00\x00\x40\x00\x00\x0f':
+                        offset_adjustment += 0x1c
+                    else:
+                        print('Invalid pointer at %d.' % start+curr_rel_offset)
+                        raise ValueError
+                extra_bytes = 0x09000000 | offset_adjustment
+                ptr = int.from_bytes(raw_ptr[:3], 'little')
+            else:
+                extra_bytes = None
+                ptr = struct.unpack('<i', raw_ptr)[0]
+            ptr = (ptr << 2) + start - offset_adjustment
 
             if not single_ptr_tbl[index]:
-                file.seek(box_ptr_start + curr_rel_offset)
-                ptr = struct.unpack('<i', file.read(4))[0]
-                ptr = (ptr << 2) + box_ptr_start
-                box_ptrs.append_attributes(
-                    ptr, box_ptr_start + curr_rel_offset, box_ptr_start)
-            else:  # If there is no box pointer table, append default values.
-                box_ptrs.append_attributes()
+                file.seek(box_tbl_start + curr_rel_offset)
+                box_ptr = struct.unpack('<i', file.read(4))[0]
+                box_ptr = (box_ptr << 2) + box_tbl_start
+                ptr_tbl.append_attributes(
+                    ptr, start + curr_rel_offset, start, extra_bytes,
+                    box_ptr=box_ptr, box_ptr_loc=box_tbl_start + curr_rel_offset,
+                    box_tbl_start=box_tbl_start)
+            else:
+                ptr_tbl.append_attributes(
+                    ptr, start + curr_rel_offset, start, extra_bytes)
 
             curr_rel_offset += 0x04
 
-    txt_ptrs.sort_attributes()
-    box_ptrs.sort_attributes()
+    ptr_tbl.sort_attributes()
 
-    return txt_ptrs, box_ptrs
+    return ptr_tbl
 
 
 def _get_abs_pointers(file, ptr_tbl_starts, ptr_tbl_ends, text_starts):
@@ -330,7 +375,7 @@ def _get_abs_pointers(file, ptr_tbl_starts, ptr_tbl_ends, text_starts):
     Reads tables of absolute pointers.
 
     Reads pointers used for text in battle, menus, and the world map (contained
-    within OV_ files) into PointerTable objects, then returns them. These
+    within OV_ files) into PointerTable object, then returns it. These
     values are or are calculated from absolute positions in RAM, and come in
     two varieties: absolute (high byte is 0x80) and instructional (pointer is
     an addiu instruction that adds the two low bytes to 0x110000). The latter
@@ -339,12 +384,10 @@ def _get_abs_pointers(file, ptr_tbl_starts, ptr_tbl_ends, text_starts):
     This function allows for the input of multiple pointer tables (as some
     files have more than one located in different parts of the file).
 
-    Pointer tables are sorted prior to return according to value, so that all
+    The pointer tables is sorted prior to return according to value, so that all
     text will be dumped/inserted in the order it occurs, regardless of the
     position of the pointer itself (as these may be out of order relative to
-    the text). A box pointer object is returned as well for consistency, but
-    all values in attribute lists will be None, as there are no box pointer
-    tables in files with absolute pointers.
+    the text).
 
     Parameters
     ----------
@@ -360,12 +403,11 @@ def _get_abs_pointers(file, ptr_tbl_starts, ptr_tbl_ends, text_starts):
 
     Returns
     -------
-    (PointerTable, PointerTable)
-        Returns PointerTable objects for text pointers and box pointers
+    PointerTable
+        Returns PointerTable object for text and box pointers
     """
 
-    txt_ptrs = PointerTable()
-    box_ptrs = PointerTable()
+    ptr_tbl = PointerTable()
 
     # Loop through each pointer table in the file.
     for index, start in enumerate(ptr_tbl_starts):
@@ -391,10 +433,9 @@ def _get_abs_pointers(file, ptr_tbl_starts, ptr_tbl_ends, text_starts):
 
         curr_rel_offset = 0x00
         offset_diff = ptr - text_starts[index]
-        txt_ptrs.append_attributes(
+        ptr_tbl.append_attributes(
             text_starts[index], start + curr_rel_offset, start,
             extra_bytes, offset_diff, text_starts[index])
-        box_ptrs.append_attributes()
 
         # Loop through current table 4 bytes at a time, reads the absolute
         # RAM pointer value, then use offset difference to convert to game
@@ -416,14 +457,13 @@ def _get_abs_pointers(file, ptr_tbl_starts, ptr_tbl_ends, text_starts):
             if ptr >= text_starts[index]:
                 # Can't remember if or why this check is necessary,
                 # just leave it.
-                txt_ptrs.append_attributes(
+                ptr_tbl.append_attributes(
                     ptr, start + curr_rel_offset, start,
                     extra_bytes, offset_diff, text_starts[index])
-                box_ptrs.append_attributes()
             curr_rel_offset += 0x04
 
-    txt_ptrs.sort_attributes()
-    return txt_ptrs, box_ptrs
+    ptr_tbl.sort_attributes()
+    return ptr_tbl
 
 
 def _decode_text_block(input_file, text_start=None):
@@ -575,19 +615,17 @@ def dump_text(file, csv_file, ptr_tbl_starts, ptr_tbl_ends,
     with open(file, 'rb') as inf:
         # Get text pointer list.
         if ov_text_starts is None:
-            txt_ptr_list, box_ptr_list = \
-                _get_rel_pointers(
-                    inf, ptr_tbl_starts, ptr_tbl_ends, single_ptr_tbl)
+            ptr_list = _get_rel_pointers(
+                inf, ptr_tbl_starts, ptr_tbl_ends, single_ptr_tbl)
         else:
-            txt_ptr_list, box_ptr_list = \
-                _get_abs_pointers(
-                    inf, ptr_tbl_starts, ptr_tbl_ends, ov_text_starts)
+            ptr_list = _get_abs_pointers(
+                inf, ptr_tbl_starts, ptr_tbl_ends, ov_text_starts)
 
         # Decode text block for each unique pointer.
         entry_num = 1
-        for index, ptr in enumerate(txt_ptr_list.ptrs):
+        for index, ptr in enumerate(ptr_list.ptrs):
             # Skip pointer if it is a duplicate.
-            if index > 0 and ptr == txt_ptr_list.ptrs[index-1]:
+            if index > 0 and ptr == ptr_list.ptrs[index-1]:
                 continue
 
             try:
@@ -605,7 +643,7 @@ def dump_text(file, csv_file, ptr_tbl_starts, ptr_tbl_ends,
             except EOFError as e:
                 print('Dump: Pointer value at offset %s exceeds size of %s'
                       '\nDump: Skipping file' %
-                      (hex(txt_ptr_list.ptr_locs[index]), file))
+                      (hex(ptr_list.ptr_locs[index]), file))
                 if called:
                     raise e
                 else:
@@ -700,37 +738,6 @@ def dump_additions(file, csv_file, tbl_start=(0x3424c,),
         print('Dump: Could not access %s. Make sure file is closed' % csv_file)
 
 
-def _dump_helper(file, script_deficit):
-    """
-    Helper for dump_all that selects between dump_text and dump_additions.
-
-    Uses number of arguments passed by dump_all() to decide between dumping
-    normal game text and additions. If the file fails to dump, the number
-    of scripts dumped is decremented by 1.
-
-    Parameters
-    ----------
-    file : list
-        List of parameters for a file as read from the file list text file.
-    script_deficit : int
-        Number to subtract from total files dumped when a dump fails.
-    """
-
-    try:
-        if len(file) == 5:
-            dump_additions(file[0], file[4], file[2], file[3], True)
-        else:
-            dump_text(file[0], file[6], file[2], file[3], file[4], file[5], True)
-    except FileNotFoundError:
-        print('Dump: File %s not found\nDump: Skipping file' %
-              sys.exc_info()[1].filename)
-        script_deficit -= 1
-    except EOFError:
-        script_deficit -= 1
-    except UnicodeDecodeError:
-        script_deficit -= 1
-
-
 def dump_all(list_file, disc_dict):
     """
     Dumps text from all files listed in a file list text file.
@@ -738,8 +745,8 @@ def dump_all(list_file, disc_dict):
     Reads file from file list text file and adds all files with additional
     text dumping parameters to a list of file to dump text from. A new blank
     CSV is created for each disc that contains files to dump. The function
-    then loops through these and calls _dump_helper() on each one, dumping
-    text to their respective CSVs.
+    then loops through these and calls either dump_text() or dump_additions()
+    on each one, dumping text to their respective CSVs.
 
     This function should be used with output txt file from id_file_type.
     This has already been done for each disc.
@@ -758,6 +765,10 @@ def dump_all(list_file, disc_dict):
     # the name of the corresponding CSV to dump text for that disc to.
     files_list = read_file_list(list_file, disc_dict,
                                 file_category='[PATCH]')['[PATCH]']
+    if len(files_list) == 0:
+        print('\nDump: No files found in file list.')
+        sys.exit(7)
+
     script_dict = {}
     for key in list(files_list.keys()):
         file_parts = [x for x in os.path.split(disc_dict[key][2])]
@@ -849,9 +860,20 @@ def dump_all(list_file, disc_dict):
                   script_dict[disc])
 
     # Dump text from each file listed in files_to_dump.
-    script_deficit = 0
-    for dump_file in sorted(files_to_dump):
-        _dump_helper(dump_file, script_deficit)
+    for file in sorted(files_to_dump):
+        try:
+            if len(file) == 5:
+                dump_additions(file[0], file[4], file[2], file[3], True)
+            else:
+                dump_text(file[0], file[6], file[2], file[3], file[4], file[5], True)
+        except FileNotFoundError:
+            print('Dump: File %s not found\nDump: Skipping file' %
+                  sys.exc_info()[1].filename)
+            scripts_dumped -= 1
+        except EOFError:
+            scripts_dumped -= 1
+        except UnicodeDecodeError:
+            scripts_dumped -= 1
 
-    print('Dump: Dumped %s of %s script files' %
-          (scripts_dumped+script_deficit, total_scripts))
+    print('Dump: Dumped %s of %s script files\n' %
+          (scripts_dumped, total_scripts))
