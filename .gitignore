@@ -26,3 +26,4 @@ source
 Makefile
 dist
 *.config
+scratch.py
