@@ -1322,6 +1322,7 @@ def _extraction_handler(source_file, sector_padding=False, files_to_extract=('*'
         return
 
     if not os.path.exists(source_file):
+        print('Decompress: %s does not exist' % source_file)
         return
 
     source_file = source_file.upper()
@@ -1850,6 +1851,7 @@ def unpack_all(source_file):
         return
 
     # Extract top-level files from MRG, and set subfile directory to search.
+    # TODO: provide option for setting padding
     extract_files(source_file, True)
     dir_to_search = os.path.join(
         os.path.dirname(source_file),
@@ -1896,7 +1898,7 @@ def unpack_all(source_file):
             break
 
     # Delete all empty subdirectories.
-    for f in glob.glob(os.path.join(dir_to_search, '**', '*'), recursive=True):
+    for f in sorted(glob.glob(os.path.join(dir_to_search, '**', '*'), recursive=True), reverse=True):
         try:
             os.rmdir(f)
         except OSError:

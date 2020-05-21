@@ -14,7 +14,7 @@ from game_file_handler import extract_files, extract_all_from_list, insert_files
     insert_all_from_list, file_swap, swap_all_from_list, run_decompression,\
     run_compression, unpack_all
 from id_files import id_file_type
-from text_handler import dump_text, dump_additions, dump_all
+from text_handler import dump_text, dump_all
 """import copy
 import glob
 import re
@@ -456,29 +456,6 @@ def parse_arguments():
                           offsets of text if file is .OV_ (default: None)''')
     parser_d.set_defaults(dump_text=dump_text)
 
-    # create subparser for dumpadd command
-    parser_dd = subparsers.add_parser('dumpadd',
-                                      usage='''%(prog)s file csv_file 
-                                      ptr_tbl_start ptr_tbl_end''',
-                                      description='''Dumps addition text from
-                                      BTTL.OV_ to a CSV file. As additions are
-                                      encoded and read differently than other
-                                      text, dumping them requires a dedicated
-                                      function. ptr_tbl_start and ptr_table_end
-                                      indicate the starting and ending offsets
-                                      of the block, respectively, with the end
-                                      being the offset of the byte-pair 00 2F.''',
-                                      help='Dumps addition text from BTTL.OV_')
-
-    # positional arguments
-    parser_dd.add_argument('file', help='Specify file to dump text from')
-    parser_dd.add_argument('csv_file', help='Full path of CSV file to dump to')
-    parser_dd.add_argument('ptr_tbl_start', type=str, help='''Offset of 
-                           beginning of pointer table''')
-    parser_dd.add_argument('ptr_tbl_end', type=str, help='''Offset of 
-                           ends of pointer tables''')
-    parser_dd.set_defaults(dump_additions=dump_additions)
-
     # create subparser for dumpall command
     parser_da = subparsers.add_parser('dumpall',
                                       usage='%(prog)s game_version [-f script_folder] '
@@ -676,6 +653,7 @@ if __name__ == '__main__':
                 print('Backing up %s' % input_file)
                 args.file_backup(input_file, args.restore_from_backup)
         elif args.func == 'cdpatch':
+            # TODO: Need to consider the case of all discs, and what this tool should be used for
             if args.disc[0] == '*':
                 args.disc = ['All Discs', 'Disc 1', 'Disc 2', 'Disc 3', 'Disc 4']
             else:
@@ -696,7 +674,9 @@ if __name__ == '__main__':
             if 'All Discs' in args.disc:
                 for disc in ('Disc 1', 'Disc 2', 'Disc 3', 'Disc 4'):
                     if disc not in disc_dict.keys():
-                        disc_dict[disc] = [config_dict['[Game Discs]'][args.version][disc][0],
+                        disc_path = os.path.join(config_dict['[Game Directories]'][args.version],
+                                                 config_dict['[Game Discs]'][args.version][disc][0])
+                        disc_dict[disc] = [disc_path,
                                            ['', {}], '']
             args.psxmode(disc_dict, args.restore)
         elif args.func == 'decompress':
@@ -762,6 +742,7 @@ if __name__ == '__main__':
             ptr_tbl_ends = [int(x, 16) for x in args.ptr_tbl_ends.split(',')]
             single_ptr_tbl = []
             for x in args.single_ptr_tbl.split(','):
+
                 if x == '1' or x.lower() == 'true':
                     single_ptr_tbl.append(True)
                 elif x == '0' or x.lower() == 'false':
@@ -774,14 +755,6 @@ if __name__ == '__main__':
                 ov_text_starts = None
             args.dump_text(args.file, args.csv_file, ptr_tbl_starts,
                            ptr_tbl_ends, single_ptr_tbl, ov_text_starts)
-        elif args.func == 'dumpadd':
-            scripts_folder = os.path.split(args.csv_file)[0]
-            if not os.path.isdir(scripts_folder):
-                os.makedirs(scripts_folder)
-            ptr_tbl_start = [int(x, 16) for x in args.ptr_tbl_start.split(',')]
-            ptr_tbl_end = [int(x, 16) for x in args.ptr_tbl_end.split(',')]
-            args.dump_additions(args.file, args.csv_file, ptr_tbl_start,
-                                ptr_tbl_end)
         elif args.func == 'dumpall':
             file = config_dict['[File Lists]'][args.version]
             if args.script_folder is None:

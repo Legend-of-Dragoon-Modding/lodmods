@@ -82,9 +82,10 @@ def cdpatch(disc_dict, mode='-x'):
     For each disc listed in disc_dict, attempts to use cdpatch to extract
     or insert flagged game files, depending on how the mode flag is set.
 
-    Cdpatch is the preferred game file extractor/inserter, as it properly
-    inserts XA audio in addition to normal files. It is unable to handle
-    inserting files of increased size, however.
+    Cdpatch is the preferred game file extractor/inserter for XA audio
+    only, as it is required for that. It is unable to handle inserting
+    files of increased size, however, and this wrapper function will
+    behave unexpectedly when trying to insert files from All Discs.
 
     Parameters
     ----------
@@ -108,18 +109,21 @@ def cdpatch(disc_dict, mode='-x'):
     # Pop 'All Discs' key from disc_dict, then loop through the 'All Discs'
     # game file list. For each file, check whether it is present in the game
     # file lists for each individual disc. If it is not present, add it.
-    # This is required to add 'All Discs' files to all discs.
-    try:
-        all_disc_files = disc_dict.pop('All Discs')
-        for file in all_disc_files[1][1]:
-            for disc, disc_val in disc_dict.items():
-                for item in disc_val[1][1]:
-                    if os.path.basename(item) == os.path.basename(file):
-                        break
-                else:
-                    disc_dict[disc][1][1].append(file)
-    except KeyError:
-        pass  # Skip if 'All Discs' key not present.
+    # This is required to add 'All Discs' files to all discs. Only do this
+    # for insertion, as 'All Discs' files should only be extracted once to
+    # the appropriate folder.
+    if mode == '-i':
+        try:
+            all_disc_files = disc_dict.pop('All Discs')
+            for file in all_disc_files[1][1]:
+                for disc, disc_val in disc_dict.items():
+                    for item in disc_val[1][1]:
+                        if os.path.basename(item) == os.path.basename(file):
+                            break
+                    else:
+                        disc_dict[disc][1][1].append(file)
+        except KeyError:
+            pass  # Skip if 'All Discs' key not present.
 
     # For each disc in disc_dict, extract/insert all game files in
     # the file list.

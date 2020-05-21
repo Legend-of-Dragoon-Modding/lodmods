@@ -20,7 +20,7 @@ END_DLG_FLAG = re.compile(b'[\x00-\xff][\x00-\x05]\xff\xa0[\x00-\x26]\x00')
 FILETYPE_DICT = {'BPE': re.compile(b'^[\x00-\xff]{4}BPE\x1a'),
                  'MRG': re.compile(b'^MRG\x1a'),
                  'TIM': re.compile(b'^\x10\x00\x00\x00'),
-                 'TMD': re.compile(b'^\x0c\x00{12}\x41\x00{3}'),
+                 'TMD': re.compile(b'^\x0c\x00{11}\x41\x00{3}'),
                  'TEXT': END_DLG_FLAG}
 
 
