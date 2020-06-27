@@ -95,6 +95,7 @@ def cdpatch(disc_dict, mode='-x'):
         Sets mode to extract (default; -x) or insert (-i).
     """
 
+    # TODO: does not insert files for All Discs
     # Loop through each disc in disc_dict and add all flagged game files
     # to a list. Once all game files have been added, replace the game
     # file dict for that disc with the file list, as cdpatch requires
