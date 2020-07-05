@@ -1,12 +1,16 @@
+# TODO: Add in box dimension updater
+
 from copy import deepcopy
 import csv
 from more_itertools import sort_together
+import mmap
 import os
 import re
 import struct
 import sys
 from build_codec import *
 from config_handler import read_file_list
+from disc_handler import backup_file
 from game_file_handler import process_block_range
 
 is_insert = False
@@ -18,39 +22,124 @@ standard_table_end_val = build_codecs()
 codecs.register(lod_codec.custom_search)
 codecs.register(lod_ext_codec.getregentry)
 
-OV_BOUND_PATTERN = {'BTTL.OV_': [re.compile(b'\xa0\xb1\x0f\x80')],
-                    'S_BTLD.OV_': [re.compile(b'\xd8\xfb\x10\x80')],
-                    'S_ITEM.OV_': [re.compile(b'\x74\x45\x11\x80'),
-                                   re.compile(b'\x10\x7e\x11\x80'),
-                                   re.compile(b'\x2c\x9b\x11\x80'),
-                                   re.compile(b'\x10\xa1\x11\x80'),
-                                   re.compile(b'\\x5c\xb8\x11\x80'),
-                                   re.compile(b'\xf7\xf5\xec\xf7\xf7\xf7')],
-                    'WMAP.OV_': [re.compile(b'\x10\xf7\x0e\x80')],
-                    'SCUS_944.91': [re.compile(b'\x50\x04\x05\x80'),
-                                    re.compile(b'\xe8\x0b\x05\x80'),
-                                    re.compile(b'\x58\x18\x05\x80'),
-                                    re.compile(b'\x68\x21\x05\x80')],
-                    'SCUS_945.84': [re.compile(b'\x50\x04\x05\x80'),
-                                    re.compile(b'\xe8\x0b\x05\x80'),
-                                    re.compile(b'\x58\x18\x05\x80'),
-                                    re.compile(b'\x68\x21\x05\x80')],
-                    'SCUS_945.85': [re.compile(b'\x50\x04\x05\x80'),
-                                    re.compile(b'\xe8\x0b\x05\x80'),
-                                    re.compile(b'\x58\x18\x05\x80'),
-                                    re.compile(b'\x68\x21\x05\x80')],
-                    'SCUS_945.86': [re.compile(b'\x50\x04\x05\x80'),
-                                    re.compile(b'\xe8\x0b\x05\x80'),
-                                    re.compile(b'\x58\x18\x05\x80'),
-                                    re.compile(b'\x68\x21\x05\x80')]}
-ov_text_ends = {'BTTL.OV_': [],
-                'S_BTLD.OV_': [],
-                'S_ITEM.OV_': [],
-                'WMAP.OV_': [],
-                'SCUS_944.91': [],
-                'SCUS_945.84': [],
-                'SCUS_945.85': [],
-                'SCUS_945.86': []}
+VERSION_CODES = {'USA': 'SCUS', 'UK': 'SCESe', 'FRA': 'SCESf', 'GER': 'SCESg',
+                 'ITA': 'SCESi', 'SPA': 'SCESs', 'JPN': 'SCPS'}
+# TODO: Need text ends for other game versions, plus handles for multiple
+#  SCES versions.
+OV_TEXT_STARTS = {'SCUS': {'BTTL.OV_': [0x34b18],
+                           'S_BTLD.OV_': [0x14460],
+                           'S_ITEM.OV_': [0x18dfc, 0x1c698, 0x1e3b4, 0x1e998,
+                                          0x200e4, 0x20a94],
+                           'WMAP.OV_': [0x29088],
+                           'SCUS_944.91': [0x40450, 0x40be8, 0x41858, 0x42168],
+                           'SCUS_945.84': [0x40450, 0x40be8, 0x41858, 0x42168],
+                           'SCUS_945.85': [0x40450, 0x40be8, 0x41858, 0x42168],
+                           'SCUS_945.86': [0x40450, 0x40be8, 0x41858, 0x42168]},
+                  'SCESe': {'BTTL.OV_': [],
+                            'S_BTLD.OV_': [],
+                            'S_ITEM.OV_': [],
+                            'WMAP.OV_': [],
+                            'SCES_030.43': [],
+                            'SCES_130.43': [],
+                            'SCES_230.43': [],
+                            'SCES_330.43': []},
+                  'SCESf': {'BTTL.OV_': [],
+                            'S_BTLD.OV_': [],
+                            'S_ITEM.OV_': [],
+                            'WMAP.OV_': [],
+                            'SCES_030.44': [],
+                            'SCES_130.44': [],
+                            'SCES_230.44': [],
+                            'SCES_330.44': []},
+                  'SCESg': {'BTTL.OV_': [],
+                            'S_BTLD.OV_': [],
+                            'S_ITEM.OV_': [],
+                            'WMAP.OV_': [],
+                            'SCES_030.45': [],
+                            'SCES_130.45': [],
+                            'SCES_230.45': [],
+                            'SCES_330.45': []},
+                  'SCESi': {'BTTL.OV_': [],
+                            'S_BTLD.OV_': [],
+                            'S_ITEM.OV_': [],
+                            'WMAP.OV_': [],
+                            'SCES_030.46': [],
+                            'SCES_130.46': [],
+                            'SCES_230.46': [],
+                            'SCES_330.46': []},
+                  'SCESs': {'BTTL.OV_': [],
+                            'S_BTLD.OV_': [],
+                            'S_ITEM.OV_': [],
+                            'WMAP.OV_': [],
+                            'SCES_030.47': [],
+                            'SCES_130.47': [],
+                            'SCES_230.47': [],
+                            'SCES_330.47': []},
+                  'SCPS': {'BTTL.OV_': [],
+                           'S_BTLD.OV_': [],
+                           'S_ITEM.OV_': [],
+                           'WMAP.OV_': [],
+                           'SCPS_101.19': [],
+                           'SCPS_101.20': [],
+                           'SCPS_101.21': [],
+                           'SCPS_101.22': []}}
+OV_TEXT_ENDS = {'SCUS': {'BTTL.OV_': [0x34ce4],
+                         'S_BTLD.OV_': [0x168f0],
+                         'S_ITEM.OV_': [0x1c298, 0x1dfb4, 0x1e8ec, 0x1ffe4,
+                                        0x20890, 0x21f9a],
+                         'WMAP.OV_': [0x29b44],
+                         'SCUS_944.91': [0x40ae8, 0x41758, 0x42018, 0x42734],
+                         'SCUS_945.84': [0x40ae8, 0x41758, 0x42018, 0x42734],
+                         'SCUS_945.85': [0x40ae8, 0x41758, 0x42018, 0x42734],
+                         'SCUS_945.86': [0x40ae8, 0x41758, 0x42018, 0x42734]},
+                'SCESe': {'BTTL.OV_': [],
+                          'S_BTLD.OV_': [],
+                          'S_ITEM.OV_': [],
+                          'WMAP.OV_': [],
+                          'SCES_030.43': [],
+                          'SCES_130.43': [],
+                          'SCES_230.43': [],
+                          'SCES_330.43': []},
+                'SCESf': {'BTTL.OV_': [],
+                          'S_BTLD.OV_': [],
+                          'S_ITEM.OV_': [],
+                          'WMAP.OV_': [],
+                          'SCES_030.44': [],
+                          'SCES_130.44': [],
+                          'SCES_230.44': [],
+                          'SCES_330.44': []},
+                'SCESg': {'BTTL.OV_': [],
+                          'S_BTLD.OV_': [],
+                          'S_ITEM.OV_': [],
+                          'WMAP.OV_': [],
+                          'SCES_030.45': [],
+                          'SCES_130.45': [],
+                          'SCES_230.45': [],
+                          'SCES_330.45': []},
+                'SCESi': {'BTTL.OV_': [],
+                          'S_BTLD.OV_': [],
+                          'S_ITEM.OV_': [],
+                          'WMAP.OV_': [],
+                          'SCES_030.46': [],
+                          'SCES_130.46': [],
+                          'SCES_230.46': [],
+                          'SCES_330.46': []},
+                'SCESs': {'BTTL.OV_': [],
+                          'S_BTLD.OV_': [],
+                          'S_ITEM.OV_': [],
+                          'WMAP.OV_': [],
+                          'SCES_030.47': [],
+                          'SCES_130.47': [],
+                          'SCES_230.47': [],
+                          'SCES_330.47': []},
+                'SCPS': {'BTTL.OV_': [],
+                         'S_BTLD.OV_': [],
+                         'S_ITEM.OV_': [],
+                         'WMAP.OV_': [],
+                         'SCPS_101.19': [],
+                         'SCPS_101.20': [],
+                         'SCPS_101.21': [],
+                         'SCPS_101.22': []}}
 END_FLAG = re.compile(b'\xff\xa0')
 STARDUST_PATTERN = re.compile(b'\x1f\x00\x3b\x00\x49\x00\x4d\x00\x41\x00'
                               b'\x4a\x00\x3d\x00\x3c\x00\x00\x00\x05\xa7'
@@ -229,7 +318,7 @@ class PointerTable:
             list(self.box_ptrs), list(self.box_ptr_locs),\
             list(self.box_tbl_starts)
 
-    def write_pointer(self, file, index):
+    def calculate_pointer(self, file, index, ptr_type='txt'):
         """
         Write updated pointer to file and return it.
 
@@ -243,6 +332,8 @@ class PointerTable:
             Game file containing text.
         index : int
             Index of current pointer in PointerTable object.
+        ptr_type : str
+            Indicates whether pointer is a text or box pointer.
 
         Returns
         -------
@@ -250,11 +341,19 @@ class PointerTable:
             Little-endian 4-byte pointer.
         """
 
+        if ptr_type == 'txt':
+            tbl_start = self.tbl_starts[index]
+        elif ptr_type == 'box':
+            tbl_start = self.box_tbl_starts[index]
+        else:
+            print('Invalid pointer type')
+            raise ValueError
+
         if self.hi_bytes[index] is None:
-            new_ptr = (file.tell() - self.tbl_starts[index]) >> 2
+            new_ptr = (file.tell() - tbl_start) >> 2
         elif self.hi_bytes[index] & 0x09000000 == 0x09000000:
             offset_adjustment = self.hi_bytes[index] ^ 0x09000000
-            new_ptr = ((file.tell() - self.tbl_starts[index] + offset_adjustment)
+            new_ptr = ((file.tell() - tbl_start + offset_adjustment)
                        >> 2) | 0x09000000
         elif self.hi_bytes[index] == 0x80000000:
             new_ptr = (file.tell() + self.offset_diffs[index]) \
@@ -262,10 +361,10 @@ class PointerTable:
         else:
             new_ptr = (file.tell() + self.offset_diffs[index] ^ 0x110000)\
                       | self.hi_bytes[index]
-        new_ptr = new_ptr.to_bytes(4, 'little')
-
-        file.seek(self.ptr_locs[index])
-        file.write(new_ptr)
+        if new_ptr > 0x80000000:
+            new_ptr = new_ptr.to_bytes(4, 'little')
+        else:
+            new_ptr = struct.pack('<i', new_ptr)
 
         return new_ptr
 
@@ -491,25 +590,25 @@ def _decode_text_block(input_file, text_start=None):
         containing the box dimensions.
     """
 
-    half_word = None
+    byte_pair = None
     italics = False
     char_list = []
     box_dims = []
 
     # Loop through two-byte characters in text until end flag encountered.
-    while half_word != b'\xa0\xff':
+    while byte_pair != b'\xa0\xff':
         # Characters where high byte is 0x00 need to be repacked as single
         # byte to decode properly.
-        half_word = input_file.read(2)
-        half_word_val = struct.unpack('<H', half_word)[0]
+        byte_pair = input_file.read(2)
+        half_word_val = struct.unpack('<H', byte_pair)[0]
         if half_word_val <= 0xff:
-            half_word = struct.pack('B', half_word_val)
+            byte_pair = struct.pack('B', half_word_val)
         else:
-            half_word = struct.pack('>H', half_word_val)
+            byte_pair = struct.pack('>H', half_word_val)
 
         # If the 2-byte sequence isn't a flag, decode and write the character.
         # Otherwise, write the text flag.
-        if half_word not in DUMP_FLAG_DICT.keys():
+        if byte_pair not in DUMP_FLAG_DICT.keys():
             # Decode bytes using extended table (for italics) if the value
             # is greater than the end of the standard table, otherwise decode
             # using the standard table. Write { and } to csv to delineate
@@ -525,13 +624,13 @@ def _decode_text_block(input_file, text_start=None):
                     italics = False
 
                 if italics is True:
-                    char = half_word.decode('lod_extended', errors='strict')
+                    char = byte_pair.decode('lod_extended', errors='strict')
                 else:
-                    char = half_word.decode('lod', errors='strict')
+                    char = byte_pair.decode('lod', errors='strict')
             except UnicodeDecodeError as e:
                 print('Dump: Encountered unknown character %s at offset %s '
                       'while dumping file %s' %
-                      (half_word, hex(input_file.tell() - 2), input_file.name))
+                      (byte_pair, hex(input_file.tell() - 2), input_file.name))
                 raise e
             else:
                 char_list.append(char)
@@ -540,8 +639,8 @@ def _decode_text_block(input_file, text_start=None):
                 char_list.append('}')
                 italics = False
 
-            char_list.append(DUMP_FLAG_DICT[half_word])
-            if half_word == b'\xa1\xff':
+            char_list.append(DUMP_FLAG_DICT[byte_pair])
+            if byte_pair == b'\xa1\xff':
                 char_list.append('\n')
     else:  # After loop exits successfully
         # Maintain word alignment on text segment starts.
@@ -570,8 +669,122 @@ def _decode_text_block(input_file, text_start=None):
     return text_block, text_block, ''.join(box_dims)
 
 
+def _encode_text_block(text_block, text_offset):
+    """
+    Encode text to LoD's font table and return list of byte pairs to write.
+
+    Reads characters in a text block and encodes them into LoD's encoding,
+    converting tokens into their respective byte-pairs as well. Each pair
+    is then appended to a list to be written to the game file. If the length
+    of the list times 2 is not divisible by 4, an additional 0x00 pair is
+    appended to the end. The list is then returned. Encodes everything
+    designated as italics with the wrapper {} as belonging to the extended
+    table.
+
+    Parameters
+    ----------
+    text_block : str
+        Block of text read from a CSV entry.
+    text_offset : int
+        File offset at which text block starts.
+
+    Returns
+    -------
+    list
+        A list containing byte-pairs to write to game file.
+    """
+
+    i = 0
+    italics = False
+    char_list_to_write = []
+    while i < len(text_block):
+        if text_block[i] == '{':
+            italics = True
+            i += 1
+            continue
+        elif text_block[i] == '}':
+            italics = False
+            i += 1
+            continue
+
+        if text_block[i] == '<':
+            flag_end_index = text_block[i:].find('>')
+            flag = text_block[i:i + flag_end_index + 1]
+            if italics and (flag == '<LINE>' or flag == 'END'):
+                italics = False
+            byte_pair = INSERT_FLAG_DICT[flag]
+            char_list_to_write.append(byte_pair)
+            i = i + flag_end_index + 1
+        else:
+            try:
+                if italics:
+                    char = text_block[i].encode('lod_extended')
+                else:
+                    char = text_block[i].encode('lod')
+            except UnicodeEncodeError as e:
+                print('Insert: Encountered unknown character "%s" in "%s" '
+                      'while inserting file' %
+                      (text_block[i], text_block[:i + 1]))
+                raise e
+
+            if int.from_bytes(char, 'big') <= 0xff:
+                byte_pair = struct.pack('<H', *struct.unpack('B', char))
+            else:
+                byte_pair = struct.pack('<H', *struct.unpack('>H', char))
+            char_list_to_write.append(byte_pair)
+            i += 1
+    else:
+        if (text_offset + (len(char_list_to_write)) * 2) % 4 == 2:
+            char_list_to_write.append(b'\x00\x00')
+
+        return char_list_to_write
+
+
+def update_box_dimensions(csv_file):
+    """
+    Updates the box dimensions column in a CSV to fit new text dimensions.
+
+    Loops through a CSV file and calculates the maximum character width
+    and line count for each text entry (after stripping out flags),
+    then writes these values as box dimensions in the box dimensions
+    column so that manual updating unnecessary.
+
+    Parameters
+    ----------
+    csv_file : str
+        Full path and file name to CSV being updated.
+    """
+
+    updated_rows = []
+    with open(csv_file, 'r', encoding='utf-16', newline='') as f:
+        csvreader = csv.reader(f, delimiter='\t')
+        updated_rows.append(next(csvreader))
+        for row in csvreader:
+            new_text = row[3]
+            new_text = re.sub('<.*?>', '', new_text)
+            new_text = re.sub('[{}]', '', new_text)
+            new_text_list = new_text.split('\n')
+            num_lines = f'{len(new_text_list):02x}'
+            max_line_len = 0
+            for line in new_text_list:
+                if len(line) > max_line_len:
+                    max_line_len = len(line)
+            else:
+                max_line_len = f'{max_line_len:02x}'
+
+            old_box_dims = row[4]
+            box_dims = re.sub('^[a-f0-9]{2}', max_line_len, old_box_dims)
+            box_dims = re.sub('(?<= )[a-f0-9]{2}', num_lines, box_dims)
+            row[4] = box_dims
+            updated_rows.append(row)
+
+    with open(csv_file, 'w', encoding='utf-16', newline='') as f:
+        csvwriter = csv.writer(f, delimiter='\t')
+        csvwriter.writerows(updated_rows)
+
+
 def dump_text(file, csv_file, ptr_tbl_starts, ptr_tbl_ends,
-              single_ptr_tbl=(False,), ov_text_starts=None, called=False):
+              single_ptr_tbl, ov_text_starts=None, called=False):
     """
     Dumps text from a game file.
 
@@ -591,7 +804,7 @@ def dump_text(file, csv_file, ptr_tbl_starts, ptr_tbl_ends,
     file : str
         Full path name of the file from which to dump text.
     csv_file : str
-        Folder to output CSV to.
+        CSV file to which to output text.
     ptr_tbl_starts : int list
         List of starting offsets of pointer tables in file.
     ptr_tbl_ends : int list
@@ -613,120 +826,77 @@ def dump_text(file, csv_file, ptr_tbl_starts, ptr_tbl_ends,
     csv_output = []
 
     with open(file, 'rb') as inf:
-        # Get text pointer list.
-        if ov_text_starts is None:
-            ptr_list = _get_rel_pointers(
-                inf, ptr_tbl_starts, ptr_tbl_ends, single_ptr_tbl)
-        else:
-            ptr_list = _get_abs_pointers(
-                inf, ptr_tbl_starts, ptr_tbl_ends, ov_text_starts)
+        # Check for addition text, pop relevant entries from parameter lists,
+        # and dump additions.
+        for index, val in enumerate(single_ptr_tbl):
+            if val == 2:
+                add_tbl_start = ptr_tbl_starts.pop(index)
+                add_tbl_end = ptr_tbl_ends.pop(index)
+                single_ptr_tbl.pop(index)
+                ov_text_starts.pop(index)
+                add_basename = '_'.join((basename, 'additions'))
+                inf.seek(add_tbl_start)
+                addition_block_size = add_tbl_end - add_tbl_start
+                additions_block = inf.read(addition_block_size)
 
-        # Decode text block for each unique pointer.
-        entry_num = 1
-        for index, ptr in enumerate(ptr_list.ptrs):
-            # Skip pointer if it is a duplicate.
-            if index > 0 and ptr == ptr_list.ptrs[index-1]:
-                continue
+                # Split additions by character, then decode and append each
+                # character's additions as a new CSV row.
+                additions_list = [x for x in additions_block.split(b'\x00\x00') if x]
+                for i, bytestr in enumerate(additions_list, start=1):
+                    char_list = []
+                    for byte in bytestr:
+                        if byte == 0x00:
+                            char_list.append('\n')
+                        else:
+                            char_list.append(byte.to_bytes(1, 'little').decode('ascii'))
 
-            try:
-                # Make sure pointer value is valid and doesn't exceed file size.
-                if ptr < file_size:
-                    inf.seek(ptr)
-                else:
-                    raise EOFError
+                    add_string = ''.join(char_list)
+                    csv_row = [add_basename, i, add_string, add_string]
+                    csv_output.append(csv_row)
+                break
 
-                # Decode text block and create list for entry as csv row.
-                csv_row = [basename, entry_num,
-                           *_decode_text_block(inf, ov_text_starts)]
-                csv_output.append(csv_row)
-                entry_num += 1
-            except EOFError as e:
-                print('Dump: Pointer value at offset %s exceeds size of %s'
-                      '\nDump: Skipping file' %
-                      (hex(ptr_list.ptr_locs[index]), file))
-                if called:
-                    raise e
-                else:
-                    sys.exit(5)
-            except UnicodeDecodeError as u:
-                print('Dump: Skipping file')
-                if called:
-                    raise u
-                else:
-                    sys.exit(3)
-
-    # Write all text entries to a CSV.
-    try:
-        with open(csv_file, 'a', encoding='utf-16', newline='') as outf:
-            csvwriter = csv.writer(outf, delimiter='\t')
-            for row in csv_output:
-                csvwriter.writerow(row)
-    except PermissionError:
-        print('Dump: Could not access %s. Make sure file is closed' % csv_file)
-
-
-def dump_additions(file, csv_file, tbl_start=(0x3424c,),
-                   tbl_end=(0x34405,), called=False):
-    """
-    Dumps addition text from BTTL.OV_.
-
-    Additions in BTTL.OV_ are a special case of text dumping, as they do not
-    use pointer tables, and are encoded in ASCII rather than LoD's own
-    encoding. This function reads the full additions text, then splits
-    it by character. Each character's additions are ASCII decoded and
-    written to their own row in a CSV, along with the file name and entry
-    number. Additions can be written to the same CSV as all other text.
-    The CSV file will be initialized either by the command prompt interface
-    or the dump_all() function so that functionality in this function is
-    consistent regardless of whether it is used singly or as part of a batch
-    process.
-
-    Parameters
-    ----------
-    file : str
-        Full path name of the file from which to dump text.
-    csv_file : str
-        Folder to output CSV to.
-    tbl_start : int list
-        Starting offset of additions text in file. Single value, but formatted
-        as list for consistency with dump_text() (default: (0x3424c,)).
-    tbl_end : int list
-        Ending offset of additions text in file. Single value, but formatted
-        as list for consistency with dump_text() (default: (0x34405,)).
-    called : boolean
-        Indicates whether function was called from _dump_helper()
-        (default: False).
-    """
-
-    basename = os.path.splitext(os.path.basename(file))[0]
-    basename = '_'.join((basename, 'additions'))
-    csv_output = []
-
-    try:
-        with open(file, 'rb') as inf:
-            inf.seek(tbl_start[0])
-            addition_block_size = tbl_end[0] - tbl_start[0]
-            additions_block = inf.read(addition_block_size)
-    except FileNotFoundError as e:
-        if called:
-            raise e
-        else:
-            print('Dump: File %s not found\nDump: Skipping file' %
-                  sys.exc_info()[1].filename)
-            return
-
-    additions_list = [x for x in additions_block.split(b'\x00\x00') if x]
-    for i, bytestr in enumerate(additions_list, start=1):
-        char_list = []
-        for byte in bytestr:
-            if byte == 0x00:
-                char_list.append('\n')
+        if ptr_tbl_starts:  # Need to check that addition wasn't only thing being dumped
+            # Get text pointer list.
+            if ov_text_starts is None:
+                ptr_list = _get_rel_pointers(
+                    inf, ptr_tbl_starts, ptr_tbl_ends, single_ptr_tbl)
             else:
-                char_list.append(byte.to_bytes(1, 'little').decode('ascii'))
+                ptr_list = _get_abs_pointers(
+                    inf, ptr_tbl_starts, ptr_tbl_ends, ov_text_starts)
 
-        string = ''.join(char_list)
-        csv_row = [basename, i, string, string]
-        csv_output.append(csv_row)
+            # Decode text block for each unique pointer.
+            entry_num = 1
+            for index, ptr in enumerate(ptr_list.ptrs):
+                # Skip pointer if it is a duplicate.
+                if index > 0 and ptr == ptr_list.ptrs[index-1]:
+                    continue
+
+                try:
+                    # Make sure pointer value is valid and doesn't exceed file size.
+                    if ptr < file_size:
+                        inf.seek(ptr)
+                    else:
+                        raise EOFError
+
+                    # Decode text block and create list for entry as csv row.
+                    csv_row = [basename, entry_num,
+                               *_decode_text_block(inf, ov_text_starts)]
+                    csv_output.append(csv_row)
+                    entry_num += 1
+                except EOFError as e:
+                    print('Dump: Pointer value at offset %s exceeds size of %s'
+                          '\nDump: Skipping file' %
+                          (hex(ptr_list.ptr_locs[index]), file))
+                    if called:
+                        raise e
+                    else:
+                        sys.exit(5)
+                except UnicodeDecodeError as u:
+                    print('Dump: Skipping file')
+                    if called:
+                        raise u
+                    else:
+                        sys.exit(3)
 
     # Write all text entries to a CSV.
     try:
@@ -743,10 +913,10 @@ def dump_all(list_file, disc_dict):
     Dumps text from all files listed in a file list text file.
 
     Reads file from file list text file and adds all files with additional
-    text dumping parameters to a list of file to dump text from. A new blank
+    text dumping parameters to a list of files to dump text from. A new blank
     CSV is created for each disc that contains files to dump. The function
-    then loops through these and calls either dump_text() or dump_additions()
-    on each one, dumping text to their respective CSVs.
+    then loops through these and calls dump_text() on each one, dumping text
+    to their respective CSVs.
 
     This function should be used with output txt file from id_file_type.
     This has already been done for each disc.
@@ -754,7 +924,7 @@ def dump_all(list_file, disc_dict):
     Parameters
     ----------
     list_file : str
-        Text file containing list of source files to extract from/decompress.
+        Text file containing list of source files to dump text from.
     disc_dict : dict
         Dict containing information about disc image, directory structure,
         and game files
@@ -811,15 +981,7 @@ def dump_all(list_file, disc_dict):
                     file[1] = int(file[1])
                     file[2] = [int(x, 16) for x in file[2].split(',')]
                     file[3] = [int(x, 16) for x in file[3].split(',')]
-                    temp = []
-                    for x in file[4].split(','):
-                        if x == '1' or x.lower() == 'true':
-                            temp.append(True)
-                        elif x == '0' or x.lower() == 'false':
-                            temp.append(False)
-                        else:
-                            raise ValueError
-                    file[4] = deepcopy(temp)
+                    file[4] = [int(x) for x in file[4].split(',')]
                     if file[5] == '0' or file[5].lower() == 'none':
                         file[5] = None
                     else:
@@ -827,14 +989,9 @@ def dump_all(list_file, disc_dict):
                     file.append(csv_file)
                     files_to_dump.append(file)
                 except IndexError:
-                    if len(file) == 4:
-                        scripts_dumped += 1
-                        file.append(csv_file)
-                        files_to_dump.append(file)
-                    else:
-                        if val[1][1]:
-                            print('Dump: Fewer than 5 parameters given in %s, file %s\n'
-                                  'Dump: Skipping file' % (key, file_num))
+                    if val[1][1]:
+                        print('Dump: Fewer than 6 parameters given in %s, file %s\n'
+                              'Dump: Skipping file' % (key, file_num))
                     continue
                 except ValueError:
                     print('Dump: Invalid value in "%s"\n'
@@ -862,10 +1019,7 @@ def dump_all(list_file, disc_dict):
     # Dump text from each file listed in files_to_dump.
     for file in sorted(files_to_dump):
         try:
-            if len(file) == 5:
-                dump_additions(file[0], file[4], file[2], file[3], True)
-            else:
-                dump_text(file[0], file[6], file[2], file[3], file[4], file[5], True)
+            dump_text(file[0], file[6], file[2], file[3], file[4], file[5], True)
         except FileNotFoundError:
             print('Dump: File %s not found\nDump: Skipping file' %
                   sys.exc_info()[1].filename)
@@ -877,3 +1031,403 @@ def dump_all(list_file, disc_dict):
 
     print('Dump: Dumped %s of %s script files\n' %
           (scripts_dumped, total_scripts))
+
+
+def insert_text(file, csv_file, ptr_tbl_starts, ptr_tbl_ends,
+                single_ptr_tbl, ov_text_starts=None,
+                version='USA', called=False):
+    """
+    Inserts text into a game file.
+
+    First checks whether text to insert includes additions. If so, these are
+    popped from the parameters lists, and the addition text is inserted prior
+    to inserting normal text.
+
+    Reads pointers in all specified pointer tables (some files have multiple,
+    particularly OV_'s) into a single ordered list, and reads all corresponding
+    text entries from a CSV in entry order. The function then goes through all
+    pointers/text entries, encodes each character according to the LoD font
+    table the user has specified in their .tbl file, updates the pointer value,
+    and writes the encoded text to the file along with box dimensions. Duplicate
+    pointers are updated to match the value of the first occurring pointer, and
+    pointers for duplicate text are updated to point to the first occurrence of
+    that text to save space. At the end, the updated pointers are written to the
+    game file.
+
+    Parameters
+    ----------
+    file : str
+        Full path name of the file into which to insert text.
+    csv_file : str
+        CSV file from which to read text for insertion.
+    ptr_tbl_starts : int list
+        List of starting offsets of pointer tables in file.
+    ptr_tbl_ends : int list
+        List of ending offsets of pointer tables in file.
+    single_ptr_tbl : boolean list
+        Indicates whether pointer tables are dual (text and box tables)
+        (default: (False, )).
+    ov_text_starts : int list
+        List of starting offsets of text blocks in OV_ files (default: None).
+    version : str
+        Game version being modded. Needed for OV text block offsets.
+    called : boolean
+        Indicates whether function was called from _dump_helper()
+        (default: False).
+    """
+
+    # Set additional variables
+    global is_insert
+    is_insert = True
+    version = VERSION_CODES[version]
+    if 'OV_' in file.upper() or 'SCUS' in file.upper() \
+            or 'SCES' in file.upper() or 'SCPS' in file.upper():
+        file_key = re.sub('_{.*}', '', os.path.basename(file.upper()))
+        combat_ptrs = False
+    else:
+        file_key = os.path.basename(file.upper())
+        combat_ptrs = True if 'DRGN0' in file_key.upper() \
+                              or 'DRGN1' in file_key.upper() else False
+
+    backup_file(file, True)  # Always insert to clean file.
+
+    # Read all CSV entries for file being modified into a list.
+    text_list = []
+    additions_list = []
+    basename = os.path.splitext(os.path.basename(file))[0]
+    with open(csv_file, 'r', encoding='utf-16', newline='') as inf:
+        csvreader = csv.reader(inf, delimiter='\t')
+        for row in csvreader:
+            if basename.upper() in row[0].upper() and 'additions' in row[0]:
+                row[3] = row[3].replace('\u2018', '\u0027').replace('\u2019', '\u0027')
+                row[3] = row[3].replace('\u201c', '\u0022').replace('\u201d', '\u0022')
+                additions_list.append([int(row[1]), row[3]])
+            elif basename.upper() in row[0].upper():
+                row[3] = row[3].replace('\n', '')
+                row[3] = row[3].replace('\u2018', '\u0027').replace('\u2019', '\u0027')
+                row[3] = row[3].replace('\u201c', '\u0022').replace('\u201d', '\u0022')
+                row[4] = row[4].replace(' ', '00')
+                text_list.append([int(row[1]), row[3], row[4]])
+        additions_list.sort()
+        additions_block = '\n\n'.join([x[1] for x in additions_list])
+        text_list.sort(reverse=True)
+
+    with open(file, 'rb+') as outf:
+        data = mmap.mmap(outf.fileno(), 0)
+
+        # Pop addition block parameters from pointer parameters and
+        # write additions, if present in file.
+        for index, val in enumerate(single_ptr_tbl):
+            if val == 2:
+                add_tbl_start = ptr_tbl_starts.pop(index)
+                add_tbl_end = ptr_tbl_ends.pop(index)
+                single_ptr_tbl.pop(index)
+                ov_text_starts.pop(index)
+
+                # Make sure not to overflow addition block
+                addition_block_size = add_tbl_end - add_tbl_start
+                if len(additions_block) > addition_block_size:
+                    print('Insert: Length of text exceeds size of addition block'
+                          'by %d bytes.' %
+                          (len(additions_block) - addition_block_size))
+                    return
+
+                outf.seek(add_tbl_start)
+                for char in additions_block:
+                    if char == '\n':
+                        outf.write(b'\x00')
+                    else:
+                        outf.write(char.encode('ascii'))
+                outf.write((addition_block_size - len(additions_block)) * b' ')
+
+                break
+
+        # Now handle normal pointers.
+        # Get text pointer list, and box pointer list if present.
+        if ov_text_starts is None:
+            ptr_list = _get_rel_pointers(outf, ptr_tbl_starts,
+                                         ptr_tbl_ends, single_ptr_tbl)
+        else:
+            ptr_list = _get_abs_pointers(outf, ptr_tbl_starts, ptr_tbl_ends,
+                                         ov_text_starts)
+            curr_text_block = 0
+
+        # Get box pointer list if needed for combat file pointer text
+        # length limits.
+        if combat_ptrs:
+            for index, ptr in enumerate(ptr_list.ptrs):
+                txt_end = END_FLAG.search(data, ptr).end()
+                if txt_end % 4 == 0:
+                    box_offset = txt_end
+                else:
+                    box_offset = txt_end + 2
+                ptr_list.box_ptrs[index] = box_offset
+
+        outf.seek(0)
+
+        # Check for weird code like at end of DRGN21_97_2, and set the start
+        # and end offsets of the code if it's found.
+        ffcode = FFCODE_PATTERN.search(data)
+        if bool(ffcode):
+            ffcode_loc_start = ffcode.start() - 2
+            ffcode_loc_end = ffcode_loc_start + 14
+        else:
+            ffcode_loc_start = None
+            ffcode_loc_end = None
+
+        # Jump to first pointer address.
+        curr_txt_offset = ptr_list.ptrs[0]
+        outf.seek(curr_txt_offset)
+
+        # Insert text for each unique pointer.
+        dupe_check_text = []
+        prev_txt_ptr = 0
+        remaining_ptrs = sorted(deepcopy(ptr_list.ptrs), reverse=True)
+        for index, ptr in enumerate(ptr_list.ptrs):
+            remaining_ptrs.pop()
+            # Update duplicate pointers.
+            if ptr == prev_txt_ptr:
+                # Check necessary for "Goods" line (0x1026) and "Yes" line
+                # (0x6424), because the dupe pointer uses different registers.
+                if ptr_list.hi_bytes[index] is not None \
+                        and 0x09000000 < ptr_list.hi_bytes[index] < 0x80000000:
+                    hi_bytes = ptr_list.hi_bytes[index] >> 16
+                    hi_bytes = hi_bytes.to_bytes(2, 'little')
+                    new_txt_ptr = b''.join((new_txt_ptr[:2], hi_bytes))
+
+                ptr_list.ptrs[index] = new_txt_ptr
+                if ptr_list.box_ptr_locs[index] is not None:
+                    ptr_list.box_ptrs[index] = new_box_ptr
+                continue
+
+            text_block = text_list.pop()
+
+            # Update current text pointer.
+            for i, entry in enumerate(dupe_check_text):
+                # Check if text is duplicate, and set pointer to first instance
+                # if it is.
+                if text_block[1] == entry[1] and text_block[2] == entry[2]\
+                        and ptr_list.hi_bytes[index] == entry[3]:
+                    prev_txt_ptr = ptr
+                    new_txt_ptr = entry[4]
+                    ptr_list.ptrs[index] = new_txt_ptr
+                    try:
+                        new_box_ptr = entry[5]
+                        ptr_list.box_ptrs[index] = new_box_ptr
+                    except IndexError:
+                        pass
+                    break
+            else:
+                try:
+                    char_list_to_write = _encode_text_block(
+                        text_block[1], curr_txt_offset)
+                except UnicodeEncodeError as e:
+                    print('Insert: Skipping file')
+                    if called:
+                        raise e
+                    else:
+                        sys.exit(4)
+
+                # Adjust current offset location if line + box size will overwrite
+                # FFCODE, OR adjust current offset location if battle text line
+                # longer than original, OR adjust current offset location if text
+                # in an OV will overflow its current text block.
+                text_len = len(char_list_to_write) * 2
+                if ffcode_loc_start and \
+                        (curr_txt_offset + text_len + 8 > ffcode_loc_start):
+                    curr_txt_offset = ffcode_loc_end
+                    ffcode_loc_start = None
+                elif combat_ptrs:
+                    orig_text_len = ptr_list.box_ptrs[index] - ptr
+                    if text_len < orig_text_len:
+                        padding = b'\x00' * (orig_text_len - text_len)
+                        char_list_to_write.append(padding)
+                    elif text_len > orig_text_len:
+                        curr_txt_offset = os.path.getsize(file)
+                elif ov_text_starts is not None:
+                    if curr_txt_offset + text_len + 4 \
+                            > OV_TEXT_ENDS[version][file_key][curr_text_block]:
+                        if curr_text_block \
+                                < len(OV_TEXT_ENDS[version][file_key]) - 1:
+                            dead_bytes = OV_TEXT_ENDS[version][file_key][curr_text_block] - curr_txt_offset
+                            for i in range(dead_bytes):
+                                outf.write(b'\x00')
+                            curr_text_block += 1
+                            curr_txt_offset = OV_TEXT_STARTS[version][file_key][curr_text_block]
+                        else:
+                            print('Insert: Line "%s%s" exceeded end of last text block (offset %s)'
+                                  'in %s.\n'
+                                  'Insert: Text length needs to be shortened.' %
+                                  (text_block[1], text_block[2].replace('00', ' '),
+                                   hex(OV_TEXT_ENDS[version][file_key][curr_text_block]),
+                                   file_key))
+                            raise ValueError
+
+                # Calculate and update the new text pointer.
+                outf.seek(curr_txt_offset)
+                prev_txt_ptr = ptr
+                new_txt_ptr = ptr_list.calculate_pointer(outf, index)
+                ptr_list.ptrs[index] = new_txt_ptr
+
+                # Write char list to output file.
+                for item in char_list_to_write:
+                    outf.write(item)
+
+                # If box pointer table exists, update current box pointer.
+                if ptr_list.box_ptr_locs[index] is not None:
+                    new_box_ptr = ptr_list.calculate_pointer(outf, index, 'box')
+                    ptr_list.box_ptrs[index] = new_box_ptr
+                    text_block.extend((ptr_list.hi_bytes[index], new_txt_ptr, new_box_ptr))
+                else:
+                    text_block.extend((ptr_list.hi_bytes[index], new_txt_ptr))
+                dupe_check_text.append(text_block)
+
+                # Write box dimensions, if present.
+                if text_block[2]:
+                    # Game hard codes box dimensions location in battle/cutscene files
+                    # Always update values in original position for them.
+                    if combat_ptrs:
+                        outf.seek(ptr_list.box_ptrs[index])
+                        outf.write(bytes.fromhex(text_block[2]))
+                    else:
+                        outf.write(bytes.fromhex(text_block[2]))
+
+                curr_txt_offset = outf.tell()
+
+        # Fill out any unused space in an OVs text blocks with 00 bytes to
+        # reduce compressed size.
+        if ov_text_starts is not None:
+            while curr_text_block < len(OV_TEXT_ENDS[version][file_key]):
+                dead_bytes = OV_TEXT_ENDS[version][file_key][curr_text_block] - curr_txt_offset
+                for i in range(dead_bytes):
+                    outf.write(b'\x00')
+                curr_text_block += 1
+                try:
+                    curr_txt_offset = OV_TEXT_STARTS[version][file_key][curr_text_block]
+                    outf.seek(curr_txt_offset)
+                except IndexError:
+                    break
+
+        # Write updated pointers to the output file.
+        for index, ptr_loc in enumerate(ptr_list.ptr_locs):
+            outf.seek(ptr_loc)
+            outf.write(ptr_list.ptrs[index])
+            if ptr_list.box_ptr_locs[index] is not None:
+                outf.seek(ptr_list.box_ptr_locs[index])
+                outf.write(ptr_list.box_ptrs[index])
+
+
+def insert_all(list_file, disc_dict, version='USA'):
+    """
+    Inserts text to all files listed in a file list text file.
+
+    Reads files from file list text file and adds all files with additional
+    text inserting parameters to a list of files to insert text into. The
+    function then loops through these and calls insert_text() on each one,
+    inserting text from their respective CSVs. Each disc should have its
+    own CSV, as output by dump_all().
+
+    This function should be used with output txt file from id_file_type.
+    This has already been done for each disc.
+
+    Parameters
+    ----------
+    list_file : str
+        Text file containing list of source files to insert text into.
+    disc_dict : dict
+        Dict containing information about disc image, directory structure,
+        and game files
+    version : str
+        Version of the game to insert text for (default: 'USA')
+    """
+
+    print('\nInsert: Inserting script files')
+    # For each disc in the file list, create an entry in script_dict with
+    # the name of the corresponding CSV to insert text for that disc from.
+    files_list = read_file_list(list_file, disc_dict,
+                                file_category='[PATCH]')['[PATCH]']
+    if len(files_list) == 0:
+        print('\nDump: No files found in file list.')
+        sys.exit(7)
+
+    script_dict = {}
+    for key in list(files_list.keys()):
+        file_parts = [x for x in os.path.split(disc_dict[key][2])]
+        file_parts[1] = '.'.join((file_parts[1].replace(' ', '_'), 'csv'))
+        script_dict[key] = os.path.join(*file_parts)
+
+    # Loop through each disc in the file list and add all files with text insert
+    # parameters to list of files to insert text into.
+    scripts_inserted = 0
+    total_scripts = 0
+    files_to_insert = []
+    for disc, disc_val in files_list.items():
+        csv_file = script_dict[disc]
+
+        update_box_dimensions(csv_file)
+
+        # Loop through all files listed for each disc.
+        for key, val in disc_val.items():
+            parent_dir = '_'.join((os.path.splitext(key)[0], 'dir'))
+            base_name = os.path.splitext(os.path.basename(key))[0]
+
+            # Loop through all subfiles listed for each file.
+            for file in val[1:]:
+                # Convert file number to full file name with path.
+                file_num = file[0]
+                if 'OV_' in key.upper() or 'SCUS' in key.upper() \
+                        or 'SCES' in key.upper() or 'SCPS' in key.upper():
+                    block_range = process_block_range(file_num, base_name)
+                    extension = os.path.splitext(key)[1]
+                    file[0] = os.path.join(
+                        parent_dir, ''.join((base_name, '_', block_range, extension)))
+                else:
+                    file[0] = os.path.join(
+                        parent_dir, ''.join((base_name, '_', file_num, '.BIN')))
+
+                # Convert all parameters to their appropriate data types,
+                # append the appropriate csv_file to the end of the list
+                # container with the file parameters, and append file to
+                # list of files to isnert. Items with too few parameters
+                # will not be added.
+                try:
+                    file[1] = int(file[1])
+                    file[2] = [int(x, 16) for x in file[2].split(',')]
+                    file[3] = [int(x, 16) for x in file[3].split(',')]
+                    file[4] = [int(x) for x in file[4].split(',')]
+                    if file[5] == '0' or file[5].lower() == 'none':
+                        file[5] = None
+                    else:
+                        file[5] = [int(x, 16) for x in file[5].split(',')]
+                    file.append(csv_file)
+                    files_to_insert.append(file)
+                except IndexError:
+                    if val[1][1]:
+                        print('Insert: Fewer than 6 parameters given in %s, file %s\n'
+                              'Insert: Skipping file' % (key, file_num))
+                    continue
+                except ValueError:
+                    print('Insert: Invalid value in "%s"\n'
+                          'Insert: Skipping file' % file)
+                    continue
+                else:
+                    scripts_inserted += 1
+                finally:
+                    if val[1][1]:
+                        total_scripts += 1
+
+    # Insert text into each file listed in files_to_dump.
+    for file in sorted(files_to_insert):
+        try:
+            insert_text(file[0], file[6], file[2], file[3], file[4], file[5], version, True)
+        except FileNotFoundError:
+            print('Insert: File %s not found\nInsert: Skipping file' %
+                  sys.exc_info()[1].filename)
+            scripts_inserted -= 1
+        except EOFError:
+            scripts_inserted -= 1
+        except UnicodeDecodeError:
+            scripts_inserted -= 1
+
+    print('Insert: Inserted %s of %s script files\n' %
+          (scripts_inserted, total_scripts))
