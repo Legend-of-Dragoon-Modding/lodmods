@@ -739,7 +739,8 @@ def _compress_block(block, comp_block_list, attempt_num, is_subfile=False,
     comp_block_list.append(block)
 
 
-def _compress(decompressed_file, attempt_num=0, mod_mode=False, is_subfile=False):
+def _compress(decompressed_file, compressed_file, attempt_num=0,
+              mod_mode=False, is_subfile=False):
     """
     BPE compresses LoD game files.
 
@@ -758,7 +759,9 @@ def _compress(decompressed_file, attempt_num=0, mod_mode=False, is_subfile=False
     Parameters
     ----------
     decompressed_file : BufferedReader
-        I/O file object of compressed file.
+        I/O file object of decompressed file.
+    compressed_file : str
+        Name of compressed file.
     attempt_num : int
         Number of current compression attempt for _choose_sort(). (default: 0)
     mod_mode : boolean
@@ -778,10 +781,7 @@ def _compress(decompressed_file, attempt_num=0, mod_mode=False, is_subfile=False
     file_name = os.path.realpath(decompressed_file.name)
     meta_file = os.path.join(os.path.dirname(file_name), 'meta',
                              os.path.basename(file_name))
-    extension = os.path.splitext(decompressed_file.name)[1]
-    compressed_file_name = \
-        os.path.dirname(decompressed_file.name).replace('_DIR', extension)
-    backup_file(compressed_file_name)
+    backup_file(compressed_file)
 
     # Adds byte pairs to dictionary until no pairs exist with count >= 5
     # or no empty keys are left.
@@ -818,7 +818,7 @@ def _compress(decompressed_file, attempt_num=0, mod_mode=False, is_subfile=False
     #  by pattern searching (b'[\x00-\xff][\x00-\x08]\x00\x00') on only word-
     #  aligned values. However, testing is required, as it is possible this
     #  pattern can appear in situations where it is not a block size.
-    with open(compressed_file_name, 'rb+') as comp:
+    with open(compressed_file, 'rb+') as comp:
         start_block_offset, end_block_offset, subfile_start = \
             _dummy_decompress(comp, start_block, end_block, is_subfile)
 
@@ -922,7 +922,7 @@ def _compress(decompressed_file, attempt_num=0, mod_mode=False, is_subfile=False
         comp.read(4)
         comp.write(comp_file_end)
 
-    return end_block_offset, new_end_offset, new_order_list, compressed_file_name
+    return end_block_offset, new_end_offset, new_order_list, compressed_file
 
 
 def run_compression(decompressed_file, mod_mode=True, is_subfile=False,
@@ -973,8 +973,10 @@ def run_compression(decompressed_file, mod_mode=True, is_subfile=False,
     meta_file = os.path.join(os.path.dirname(decompressed_file), 'meta',
                              os.path.basename(decompressed_file))
     extension = os.path.splitext(decompressed_file)[1]
-    compressed_file = \
-        os.path.dirname(decompressed_file).replace('_DIR', extension)
+    compressed_dir = os.path.dirname(decompressed_file)
+    compressed_file = os.path.join(
+        os.path.dirname(compressed_dir),
+        os.path.basename(compressed_dir).replace('_DIR', extension))
     temp = '.'.join((compressed_file, 'temp'))
     shutil.copy(compressed_file, temp)
 
@@ -995,7 +997,7 @@ def run_compression(decompressed_file, mod_mode=True, is_subfile=False,
                           (attempts, max_attempts, return_vals[0], return_vals[1]))
 
             # Compress file.
-            return_vals = _compress(inf, attempts, mod_mode, is_subfile)
+            return_vals = _compress(inf, compressed_file, attempts, mod_mode, is_subfile)
 
             # If file is not a subfile and not flagged for modding, no further action
             # is necessary. If either of those are true, however, further action is
@@ -1766,8 +1768,11 @@ def _insertion_handler(source_file, sector_padding=False, files_to_insert=('*',)
                 '_'.join((os.path.splitext(source_file)[0], 'DIR')),
                 ''.join((bn_parts[0], '_', block_range, bn_parts[1])))
 
-            run_compression(dec_file, True, not sector_padding,
+            run_compression(dec_file, False, False, #not sector_padding,
                             delete_decompressed=del_subdir)
+            # TODO: need to come up with another method of specifying subfiles
+            #  for compression because did not originally anticipate all the
+            #  nested BPEs in DRGN0
     else:
         print('Insert: %s is not a MRG or BPE file' % source_file)
         print('Insert: Skipping file')
@@ -2023,3 +2028,29 @@ def swap_all_from_list(list_file, disc_dict_pair, del_src_dir=False):
             os.rmdir(disc_dict_pair[0][key][1][0])
 
     print(ERASE + 'Swap: Files swapped')
+
+
+if __name__ == '__main__':
+    from config_handler import read_config
+
+    config_dict = read_config('lodmods.config')
+    version = 'USA'
+    scripts_dir = config_dict['[Modding Directories]']['Scripts']
+    file = config_dict['[File Lists]'][version]
+    game_files_dir = config_dict['[Modding Directories]']['Game Files']
+    disc_list = list(config_dict['[Game Discs]'][version].keys())
+    disc_dict = {}
+    for disc in disc_list:
+        if config_dict['[Game Discs]'][version][disc][0] != '':
+            img = config_dict['[Game Discs]'][version][disc][0] \
+                if disc != 'All Discs' \
+                else config_dict['[Game Discs]'][version]['Disc 4'][0]
+            disc_dir = os.path.join(version, disc)
+            disc_dict[disc] = [
+                os.path.join(config_dict['[Game Directories]'][version], img),
+                [os.path.join(game_files_dir, disc_dir),
+                 config_dict['[Game Discs]'][version][disc][1]],
+                os.path.join(scripts_dir, disc_dir)]
+        else:
+            print('lodhack: %s file name not specified in config file' % disc)
+    insert_all_from_list('TMD.txt', disc_dict)
