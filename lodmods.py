@@ -13,15 +13,13 @@ from disc_handler import backup_file, cdpatch, psxmode
 from game_file_handler import extract_files, extract_all_from_list, insert_files,\
     insert_all_from_list, file_swap, swap_all_from_list, run_decompression,\
     run_compression, unpack_all
-from id_files import id_file_type
-from text_handler import dump_text, dump_all
+from id_files import id_file_type, build_index
+from text_handler import dump_text, dump_all, insert_text, insert_all
 """import copy
 import glob
 import re
 import shutil
 import traceback
-from dump_insert import dump_script, dump_all, insert_script, insert_all
-from csv_converter import scripts_to_csv, csv_to_scripts
 from lod_patcher import update_mod_list, create_patches, patch"""
 
 
@@ -242,6 +240,25 @@ def parse_arguments():
                           (default: False)''')
     parser_c.set_defaults(run_compression=run_compression)
 
+    # create subparser for buildindex command
+    parser_bi = subparsers.add_parser(
+        'buildindex', usage='%(prog)s dir_to_search -o output_file',
+        description='''Builds an index of all files within the given directory.
+        This should be used on directories built using the unpack function to
+        create a full list of unpacked files. To output to a file instead of
+        the console, include the name of a file to output to.''',
+        help='Builds index of unpacked files')
+
+    # positional argument
+    parser_bi.add_argument('dir_to_index', help='''Specify folder containing
+    files to index''')
+
+    # optional arguments
+    parser_bi.add_argument('-o', '--output', dest='output_file', default=None,
+                           metavar='', help='''Specify output text file for file
+                           list (default: None [prints to console])''')
+    parser_bi.set_defaults(build_index=build_index)
+
     # create subparser for idfiles command
     parser_id = subparsers.add_parser('idfiles',
                                       usage='%(prog)s dir_to_search [-t file_type]'
@@ -250,7 +267,7 @@ def parse_arguments():
                                       contain the header type or hex pattern
                                       specified and outputs the file list to 
                                       either console or a text file. Currently 
-                                      known file types are BPE, MRG, TIM, TMD, and
+                                      known file types are DEFF, MCQ, TIM, TMD, and
                                       TEXT. header_pattern should only be used if
                                       file_type is set to None (i.e. the file type
                                       is not known for certain yet).''',
@@ -265,8 +282,8 @@ def parse_arguments():
                            metavar='', help='''Specify file type from list to
                            search for (default: None)''')
     parser_id.add_argument('-p', '--pattern', dest='header_pattern', default=None,
-                           metavar='', help='''Hex pattern to search for
-                           (default: None)''')
+                           metavar='', help='''Hex pattern to search for, e.g. 
+                           \'0c00\' (default: None)''')
     parser_id.add_argument('-o', '--out', dest='output_file', default=None,
                            metavar='', help='''Specify output file for text
                            locations (prints to console by default)''')
@@ -387,6 +404,11 @@ def parse_arguments():
 
     # Positional argument
     parser_u.add_argument('source_file', help='MRG file to unpack')
+
+    # Optional argument
+    parser_u.add_argument('-p', '--padding', action='store_true',
+                          dest='sector_padded', help='''Indicate whether
+                          file is sector-aligned (default: False)''')
     parser_u.set_defaults(unpack_all=unpack_all)
 
     # Create subparser for swap command.
@@ -424,7 +446,7 @@ def parse_arguments():
     parser_d = subparsers.add_parser('dump',
                                      usage='''%(prog)s file csv_file 
                                      pointer_table_starts pointer_table_ends
-                                     [-s] [-v ov_text_starts]''',
+                                     [-s single_ptr_tables] [-v ov_text_starts]''',
                                      description='''Dumps the text in the input
                                      file to a CSV file using its pointer 
                                      table(s). File may have either single (text
@@ -436,7 +458,10 @@ def parse_arguments():
                                      file, the optional ov_text_starts argument
                                      should be used as well to specify the starts
                                      of all text blocks corresponding to the
-                                     pointer tables.''',
+                                     pointer tables. (This function is okay for
+                                     testing purposes, but for modding purposes,
+                                     using dumpall with a file list is STRONGLY
+                                     preferred.)''',
                                      help='Dump game text to CSV file')
 
     # positional arguments
@@ -450,7 +475,7 @@ def parse_arguments():
     # optional arguments
     parser_d.add_argument('-s', '--single', dest='single_ptr_tbl',
                           default='0', metavar='', help='''Indicates that
-                          pointer table is a single table (default: False)''')
+                          pointer table is a single table (default: 0)''')
     parser_d.add_argument('-v', '--ovl', dest='ov_text_starts',
                           default=None, metavar='', help='''Specify starting
                           offsets of text if file is .OV_ (default: None)''')
@@ -493,61 +518,54 @@ def parse_arguments():
                            @Scripts under [Modding Directories])''')
     parser_da.set_defaults(dump_all=dump_all)
 
-    """# create subparser for insert command
+    # create subparser for insert command
     parser_i = subparsers.add_parser('insert',
-                                     usage='%(prog)s script_file target'
-                                     '_file pointer_table_start pointer_table_end'
-                                     '[-s] [-c] [-v ov_text_starts]',
-                                     description='''Inserts script file into
+                                     usage='%(prog)s target_file csv_file '
+                                     'pointer_table_starts pointer_table_ends'
+                                     '[-s single_ptr_tables] [-o ov_text_starts] '
+                                     '[-v version]',
+                                     description='''Inserts script from CSV into
                                      target .bin file and updates the pointer
                                      table(s). File may have either one pointer 
-                                     table (text only) or two pointer tables (text
-                                     and text window size). ptr_tbl_end indicates
-                                     the end of the full pointer table, regardless
-                                     of whether it is divided into two tables. 
-                                     Should be specified with optional switch if
-                                     file is for combat or a cutscene.''',
+                                     table (text only) or dual pointer tables 
+                                     (text and text window size). ptr_tbl_ends 
+                                     indicate the ends of the full pointer 
+                                     tables, regardless of whether they are 
+                                     divided into  two tables. (This function is 
+                                     okay for testing purposes, but for modding 
+                                     purposes, using insertall with a file list is
+                                     STRONGLY preferred.)''',
                                      help='''Insert text script into .bin file''')
 
     # positional arguments
-    parser_i.add_argument('script_file', help='Specify script file to insert')
-    parser_i.add_argument('ptr_tbl_start', type=str, help='''Offset of 
-                          beginning of pointer table''')
-    parser_i.add_argument('ptr_tbl_end', type=str, help='''Offset of 
-                          end of pointer table''')
-    parser_i.add_argument('-f', '--file', dest='target_file', required=True,
-                          metavar='', help='''Specify .bin file to insert 
-                          script into''')
+    parser_i.add_argument('target_file', help='File to insert text into')
+    parser_i.add_argument('csv_file', help='CSV file to insert text from')
+    parser_i.add_argument('ptr_tbl_starts', type=str, help='''Offsets of 
+                          beginnings of pointer tables''')
+    parser_i.add_argument('ptr_tbl_ends', type=str, help='''Offsets of 
+                          ends of pointer tables''')
 
     # optional arguments
-    parser_i.add_argument('-s', '--single', action='store_true',
-                          dest='single_ptr_tbl', help='''Indicates that
-                          pointer table is a single table (default: False)''')
-    parser_i.add_argument('-c', '--combat', action='store_true',
-                          dest='combat_ptrs', help='''Indicates that
-                          script is from combat or cutscene file 
-                          (default: False)''')
-    parser_i.add_argument('-v', '--ovl', dest='ov_text_starts',
+    parser_i.add_argument('-s', '--single', dest='single_ptr_tbl',
+                          default='0', metavar='', help='''Indicates that
+                          pointer tables are single tables (default: 0)''')
+    parser_i.add_argument('-o', '--ovl', dest='ov_text_starts',
                           default=None, metavar='', help='''Specify starting
                           offsets of text if file is .OV_ (default: None)''')
-    parser_i.set_defaults(insert_script=insert_script)
+    parser_i.add_argument('-v', '--version', dest='version', default='USA',
+                          metavar='', help='''Game version to insert text
+                          into (default: "USA")''')
+    parser_i.set_defaults(insert_text=insert_text)
 
     # create subparser for insertall command
     parser_ia = subparsers.add_parser('insertall',
-                                      usage='%(prog)s game_version [-f script_folder] '
-                                      '[-c csv_file]',
+                                      usage='%(prog)s game_version [-f script_folder]',
                                       description='''Takes text file containing
                                       a list of asset files (as generated by
-                                      the findassets command) and inserts the 
-                                      dialogue from the script file that 
-                                      corresponds to each .bin file in the list.
-                                      Input text file should be the same one used
-                                      for the dumpall command. Script files must
-                                      have the same file name as the .bin files
-                                      they correspond to (i.e. DRGN21_299_3.txt
-                                      and DRGN21_299_3.bin). A CSV file containing
-                                      the merged scripts may be used to generate
-                                      new script files for insertion.''',
+                                      the idfiles command) and inserts the 
+                                      text from the CSV files that correspond to 
+                                      each disc in the list to their appropriate
+                                      game files.''',
                                       help='''Inserts text scripts into all .bin
                                       files listed in input text file.''')
 
@@ -560,49 +578,7 @@ def parse_arguments():
                            default=None, metavar='',
                            help='''Folder containing dumped scripts to insert
                            (default: @Scripts under [Modding Directories])''')
-    parser_ia.add_argument('-c', '--csv', action='store_true', dest='use_csv',
-                           help='''Generate text files for insertion from
-                           CSV files (default: False)''')
     parser_ia.set_defaults(insert_all=insert_all)
-
-    # create subparser for tocsv command
-    parser_tc = subparsers.add_parser('tocsv',
-                                      usage='%(prog)s game_version -d disc(s) [-f script_folder]',
-                                      description='''Converts script files specified
-                                      in list_file into a single ordered CSV file,
-                                      which can be edited and used for text insertion.''',
-                                      help='''Convert .txt script files to CSV''')
-    # positional arguments
-    parser_tc.add_argument('version', help='''Game version to create CSV for''')
-    parser_tc.add_argument('-d', '--disc', nargs='+', required=True, metavar='',
-                           help='''Discs to create CSV for (use integer numbers or 'all')''')
-
-    # optional arguments
-    parser_tc.add_argument('-f', '--folder', dest='script_folder',
-                           default=None, metavar='',
-                           help='''Folder containing scripts to merge
-                           (default: @Scripts under [Modding Directories])''')
-    parser_tc.set_defaults(scripts_to_csv=scripts_to_csv)
-
-    # create subparser for fromcsv command
-    parser_fc = subparsers.add_parser('fromcsv',
-                                      usage='%(prog)s game_version -d disc(s) [-f script_folder]',
-                                      description='''Generates separate script text
-                                      files in script_folders from 'New Dialogue' column
-                                      in a script CSV''',
-                                      help='''Convert CSVs to .txt script files''')
-
-    # positional arguments
-    parser_fc.add_argument('version', help='''Game version of CSV''')
-    parser_fc.add_argument('-d', '--disc', nargs='+', required=True, metavar='',
-                           help='''Discs to create scripts from (use integer numbers or 'all')''')
-
-    # optional arguments
-    parser_fc.add_argument('-f', '--folder', dest='script_folder',
-                           default=None, metavar='',
-                           help='''Folder to output new script files to
-                           (default: @Scripts under [Modding Directories])''')
-    parser_fc.set_defaults(csv_to_scripts=csv_to_scripts)"""
 
     """# create subparser for createpatch command
     parser_cp = subparsers.add_parser('createpatch',
@@ -709,7 +685,7 @@ if __name__ == '__main__':
             args.insert_all_from_list(file, disc_dict, args.file_category,
                                       args.del_component_folders)
         elif args.func == 'unpack':
-            args.unpack_all(args.source_file)
+            args.unpack_all(args.source_file, args.sector_padded)
         elif args.func == 'swap':
             args.file_swap(args.src_file, args.dest_file)
         elif args.func == 'swapall':
@@ -717,20 +693,13 @@ if __name__ == '__main__':
             version_list = args.swap_versions.split(':')
             disc_dict_pair = []
             for version in version_list:
-                disc_dict = {}
-                for disc in config_dict['[Game Discs]'][version].keys():
-                    if config_dict['[Game Discs]'][version][disc][0] != '0':
-                        img = config_dict['[Game Discs]'][version][disc][0] \
-                            if disc != 'All Discs' \
-                            else config_dict['[Game Discs]'][version]['Disc 4'][0]
-                        disc_dir = os.path.splitext(config_dict['[Game Discs]']
-                                                    [version][disc][0])[0]
-                        disc_dict[disc] = [
-                            os.path.join(config_dict['[Game Directories]'][version], img),
-                            [os.path.join(game_files_dir, disc_dir),
-                             config_dict['[Game Discs]'][version][disc][1]]]
+                disc_list = list(config_dict['[Game Discs]'][version].keys())
+                disc_dict = _build_disc_dict(
+                    config_dict, version, disc_list, scripts_dir, game_files_dir)
                 disc_dict_pair.append(disc_dict)
             args.file_swap_from_list(list_file, disc_dict_pair, args.del_src_dir)
+        elif args.func == 'buildindex':
+            args.build_index(args.dir_to_index, args.output_file)
         elif args.func == 'idfiles':
             args.id_file_type(args.dir_to_search, args.file_type,
                               args.header_pattern, args.output_file)
@@ -763,14 +732,16 @@ if __name__ == '__main__':
             disc_dict = _build_disc_dict(config_dict, args.version, disc_list, args.script_folder, 
                                          game_files_dir)
             args.dump_all(file, disc_dict)
-        """elif args.func == 'insert':
-            ptr_tbl_start = [int(x, 16) for x in args.ptr_tbl_start.split(',')]
-            ptr_tbl_end = [int(x, 16) for x in args.ptr_tbl_end.split(',')]
-            ov_text_starts = [int(x, 16) for x in args.ov_text_starts.split(',')]
-            args.insert_script(args.script_file, args.target_file,
-                               ptr_tbl_start, ptr_tbl_end,
-                               args.single_ptr_tbl, args.combat_ptrs,
-                               ov_text_starts)
+        elif args.func == 'insert':
+            ptr_tbl_starts = [int(x, 16) for x in args.ptr_tbl_starts.split(',')]
+            ptr_tbl_ends = [int(x, 16) for x in args.ptr_tbl_ends.split(',')]
+            single_ptr_tbl = [int(x) for x in args.single_ptr_tbl.split(',')]
+            ov_text_starts = [int(x, 16) for x in args.ov_text_starts.split(',')] \
+                if args.ov_text_starts is not None else None
+            args.insert_text(args.target_file, args.csv_file,
+                             ptr_tbl_starts, ptr_tbl_ends,
+                             args.single_ptr_tbl, ov_text_starts,
+                             args.version)
         elif args.func == 'insertall':
             file = config_dict['[File Lists]'][args.version]
             if args.script_folder is None:
@@ -778,38 +749,8 @@ if __name__ == '__main__':
             disc_list = list(config_dict['[Game Discs]'][args.version].keys())
             disc_dict = _build_disc_dict(config_dict, args.version, disc_list, args.script_folder, 
                                          game_files_dir)
-            args.insert_all(file, disc_dict, args.use_csv, args.version)
-        elif args.func == 'tocsv':
-            args.disc = ['All Discs' if x.lower() == 'all'
-                         else ' '.join(('Disc', x)) for x in args.disc]
-            if args.script_folder is None:
-                args.script_folder = scripts_dir
-            disc_dict = _build_disc_dict(config_dict, args.version, args.disc, args.script_folder, 
-                                         game_files_dir)
-            for disc, disc_val in disc_dict.items():
-                if not os.path.exists(disc_val[2]):
-                    print('\ntocsv: Script folder %s not found' % disc_val[2])
-                    continue
-                csv_file = os.path.join(os.path.dirname(disc_val[2]),
-                    ''.join((args.version, '_',
-                             disc.lower().replace(' ', ''), '.csv')))
-                args.scripts_to_csv(csv_file, disc_val[2])
-        elif args.func == 'fromcsv':
-            args.disc = ['All Discs' if x.lower() == 'all'
-                         else ' '.join(('Disc', x)) for x in args.disc]
-            if args.script_folder is None:
-                args.script_folder = scripts_dir
-            disc_dict = _build_disc_dict(config_dict, args.version, args.disc, args.script_folder, 
-                                         game_files_dir)
-            for disc, disc_val in disc_dict.items():
-                csv_file = os.path.join(os.path.dirname(disc_val[2]),
-                    ''.join((args.version, '_',
-                             disc.lower().replace(' ', ''), '.csv')))
-                if not os.path.exists(csv_file):
-                    print('\nfromcsv: CSV file %s not found' % csv_file)
-                    continue
-                args.csv_to_scripts(csv_file, disc_val[2])
-        elif args.func == 'createpatch':
+            args.insert_all(file, disc_dict, args.version)
+        """elif args.func == 'createpatch':
             list_file = config_dict['[File Lists]'][args.version]
             disc_dict = {}
             for disc, val in config_dict['[Game Discs]'][args.version].items():
