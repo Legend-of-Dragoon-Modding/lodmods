@@ -2028,29 +2028,3 @@ def swap_all_from_list(list_file, disc_dict_pair, del_src_dir=False):
             os.rmdir(disc_dict_pair[0][key][1][0])
 
     print(ERASE + 'Swap: Files swapped')
-
-
-if __name__ == '__main__':
-    from config_handler import read_config
-
-    config_dict = read_config('lodmods.config')
-    version = 'USA'
-    scripts_dir = config_dict['[Modding Directories]']['Scripts']
-    file = config_dict['[File Lists]'][version]
-    game_files_dir = config_dict['[Modding Directories]']['Game Files']
-    disc_list = list(config_dict['[Game Discs]'][version].keys())
-    disc_dict = {}
-    for disc in disc_list:
-        if config_dict['[Game Discs]'][version][disc][0] != '':
-            img = config_dict['[Game Discs]'][version][disc][0] \
-                if disc != 'All Discs' \
-                else config_dict['[Game Discs]'][version]['Disc 4'][0]
-            disc_dir = os.path.join(version, disc)
-            disc_dict[disc] = [
-                os.path.join(config_dict['[Game Directories]'][version], img),
-                [os.path.join(game_files_dir, disc_dir),
-                 config_dict['[Game Discs]'][version][disc][1]],
-                os.path.join(scripts_dir, disc_dir)]
-        else:
-            print('lodhack: %s file name not specified in config file' % disc)
-    insert_all_from_list('TMD.txt', disc_dict)
