@@ -976,7 +976,7 @@ def run_compression(decompressed_file, mod_mode=True, is_subfile=False,
     compressed_dir = os.path.dirname(decompressed_file)
     compressed_file = os.path.join(
         os.path.dirname(compressed_dir),
-        os.path.basename(compressed_dir).replace('_DIR', extension))
+        os.path.basename(compressed_dir).replace('_dir', extension))
     temp = '.'.join((compressed_file, 'temp'))
     shutil.copy(compressed_file, temp)
 
@@ -1281,7 +1281,7 @@ def extract_files(source_file, sector_padding=False, files_to_extract=('*',)):
                     continue
 
             output_file = os.path.join(
-                output_dir, ''.join((basename, '_', str(num), '.BIN')))
+                output_dir, ''.join((basename, '_', str(num), '.bin')))
 
             with open(output_file, 'wb') as outf:
                 inf.seek(file_loc)
@@ -1477,7 +1477,7 @@ def insert_files(source_file, sector_padding=False, files_to_insert=('*',),
         if all_files_test == '*':
             subdir_check = sorted(
                 [int(os.path.basename(os.path.splitext(x)[0]).split('_')[-1])
-                 for x in glob.glob(os.path.join(input_dir.upper(), '*.BIN'))])
+                 for x in glob.glob(os.path.join(input_dir.upper(), '*.bin'))])
             if file_nums != subdir_check:
                 all_files_test = ''
 
@@ -1554,7 +1554,7 @@ def _insert_helper(src_file, lba_table, file_nums, sector_padding,
     files_inserted = 0
     for index, num in enumerate(file_nums):
         input_file = os.path.join(
-            input_dir, ''.join((basename, '_', str(num), '.BIN')))
+            input_dir, ''.join((basename, '_', str(num), '.bin')))
 
         # Make sure source actually contains file number, and input
         # file exists. Skip file if not.
@@ -1691,7 +1691,7 @@ def _rebuild_helper(src_file, lba_table, sector_padding, input_dir, basename):
         # Get size of subfile being inserted, update size in the LBATable,
         # then write the subfile to src_file, padding if necessary.
         input_file = os.path.join(
-            input_dir, ''.join((basename, '_', str(file), '.BIN')))
+            input_dir, ''.join((basename, '_', str(file), '.bin')))
         with open(input_file, 'rb') as inf:
             file_size = os.path.getsize(input_file)
             lba_table.file_sizes[file-1] = file_size
@@ -1765,10 +1765,10 @@ def _insertion_handler(source_file, sector_padding=False, files_to_insert=('*',)
         for i in files_to_insert:
             block_range = process_block_range(i[0], base_name)
             dec_file = os.path.join(
-                '_'.join((os.path.splitext(source_file)[0], 'DIR')),
+                '_'.join((os.path.splitext(source_file)[0], 'dir')),
                 ''.join((bn_parts[0], '_', block_range, bn_parts[1])))
 
-            run_compression(dec_file, False, False, #not sector_padding,
+            run_compression(dec_file, False, not sector_padding,
                             delete_decompressed=del_subdir)
             # TODO: need to come up with another method of specifying subfiles
             #  for compression because did not originally anticipate all the
@@ -1823,7 +1823,7 @@ def insert_all_from_list(list_file, disc_dict, file_category='[ALL]',
     print('\nInsert: Complete')
 
 
-def unpack_all(source_file):
+def unpack_all(source_file, sector_padded=False):
     """
     Fully unpacks a MRG file into all of its component files.
 
@@ -1856,8 +1856,7 @@ def unpack_all(source_file):
         return
 
     # Extract top-level files from MRG, and set subfile directory to search.
-    # TODO: provide option for setting padding
-    extract_files(source_file, True)
+    extract_files(source_file, sector_padded)
     dir_to_search = os.path.join(
         os.path.dirname(source_file),
         '_'.join((os.path.splitext(os.path.basename(source_file))[0], 'dir')))
@@ -1967,7 +1966,8 @@ def swap_all_from_list(list_file, disc_dict_pair, del_src_dir=False):
     # destination game versions.
     src_files_list = read_file_list(list_file, disc_dict_pair[0], file_category='[SWAP]')['[SWAP]']
     dst_files_list = read_file_list(list_file, disc_dict_pair[1], file_category='[SWAP]')['[SWAP]']
-
+    print(src_files_list)
+    print(dst_files_list)
     files_to_swap = []
     total_files = 0
 
@@ -1994,7 +1994,7 @@ def swap_all_from_list(list_file, disc_dict_pair, del_src_dir=False):
             # subfile names,and append the src/dst pairs to a list of files to be
             # swapped. If the the subfile number given is '^' (current file) or
             # '*' (all files), the keys themselves are appended to the list.
-            for file in src_files_list[src_disc][src_key][2:]:
+            for file in src_files_list[src_disc][src_key][1:]:
                 if file[0] == '^' or file[0] == '*':
                     file_pair = (src_key, dst_key)
                 elif 'OV_' in src_key.upper() or 'SCUS' in src_key.upper() \
@@ -2004,9 +2004,9 @@ def swap_all_from_list(list_file, disc_dict_pair, del_src_dir=False):
                                  '.'.join((dst_key, block_range)))
                 else:
                     file_pair = (os.path.join(
-                        src_parent_dir, ''.join((src_basename, '_', file[0], '.BIN'))),
+                        src_parent_dir, ''.join((src_basename, '_', file[0], '.bin'))),
                                  os.path.join(
-                        dst_parent_dir, ''.join((dst_basename, '_', file[0], '.BIN'))))
+                        dst_parent_dir, ''.join((dst_basename, '_', file[0], '.bin'))))
                 files_to_swap.append(file_pair)
                 total_files += 1
 
