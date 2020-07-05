@@ -17,23 +17,25 @@ from config_handler import numerical_sort, write_file_list
 import re
 
 END_DLG_FLAG = re.compile(b'[\x00-\xff][\x00-\x05]\xff\xa0[\x00-\x26]\x00')
+# BPE and MRG searching won't work on an unpacked folder as these are never
+# base files, and get deleted in the unpacking process.
 FILETYPE_DICT = {'BPE': re.compile(b'^[\x00-\xff]{4}BPE\x1a'),
                  'DEFF': re.compile(b'^DEFF'),
                  'MCQ': re.compile(b'^MCQ'),
-                 # 'MRG': re.compile(b'^MRG\x1a'), won't work because MRGs deleted in unpacking
+                 'MRG': re.compile(b'^MRG\x1a'),
                  'TIM': re.compile(b'^\x10\x00{3}'),
                  'TMD': re.compile(b'\x41\x00{3}'),
                  'TEXT': END_DLG_FLAG}
 
 
-def build_index(dir_to_search, output_file):
-    if not os.path.isdir(dir_to_search):
-        print('%s not found' % dir_to_search)
+def build_index(dir_to_index, output_file=None):
+    if not os.path.isdir(dir_to_index):
+        print('%s not found' % dir_to_index)
         return
 
     # List out all files in directory being searched and loop through them.
     file_list = []
-    for r, dn, fn in os.walk(dir_to_search):
+    for r, dn, fn in os.walk(dir_to_index):
         for f in fnmatch.filter(fn, '*.bin'):
             file_list.append(os.path.join(r, f))
     file_list.sort(key=numerical_sort)
@@ -74,8 +76,8 @@ def build_index(dir_to_search, output_file):
             else:
                 patch_target = '0'
 
-            parent_file = file_parts[i - 1].upper().replace('_DIR', '.BIN')
-            curr_file = x.upper().replace('_DIR', '.BIN')
+            parent_file = file_parts[i - 1].lower().replace('_dir', '.bin')
+            curr_file = x.lower().replace('_dir', '.bin')
             parent_file = ''.join(
                 ('@', os.path.join(*file_parts[sect_index:i - 1], parent_file)))
             parent_file = parent_file.replace('\\', '/')
@@ -121,7 +123,7 @@ def build_index(dir_to_search, output_file):
                 list(disc_val[key][1]), key=lambda tup: numerical_sort(tup[0]))
 
     # Generate output using output_dict.
-    if output_file:
+    if output_file is not None:
         output_dict = {'[PATCH]': output_dict, '[SWAP]': {}}
         write_file_list(output_file, output_dict)
     else:
@@ -175,7 +177,8 @@ def id_file_type(dir_to_search, file_type=None, header_pattern=None,
             print('Please provide either a file_type or header_pattern')
             return
         else:
-            header_pattern = re.compile(b''.join((b'^', header_pattern)))
+            header_pattern = re.compile(b''.join(
+                (b'^', bytes.fromhex(header_pattern))))
     except KeyError:
         print('File type not recognized. Currently recognized '
               'file types are %s' % list(FILETYPE_DICT.keys()))
