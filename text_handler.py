@@ -1,4 +1,12 @@
-# TODO: Add in box dimension updater
+"""Provides functionality to handle text.
+
+This module contains functions to read and update pointer tables,
+decode/encode text to/from TLoD's font table, dump text from game
+files to CSV files, and insert text back into the game files from
+CSV files.
+
+Copyright (C) 2020 theflyingzamboni
+"""
 
 from copy import deepcopy
 import csv
@@ -154,8 +162,13 @@ DUMP_FLAG_DICT = {b'\xa0\xff': '<END>', b'\xa1\xff': '<LINE>',
                   b'\xa5\x01': '<START1>', b'\xa5\x02': '<START2>',
                   b'\xa5\x03': '<START3>', b'\xa5\x04': '<START4>',
                   b'\xa5\x05': '<START5>', b'\xa5\x0a': '<STARTA>',
-                  b'\xa7\x00': '<TCLOSE>', b'\xa7\x05': '<SRED>',
-                  b'\xa7\x08': '<CHOICE>', b'\xa8\x00': '<VAR0>',
+                  b'\xa5\x0f': '<STARTF>', b'\xa7\x00': '<TWHITE>',
+                  b'\xa7\x01': '<TDGRN>', b'\xa7\x02': '<TLGRN>',
+                  b'\xa7\x03': '<TCYAN>', b'\xa7\x04': '<TBRWN>',
+                  b'\xa7\x05': '<TRED>', b'\xa7\x06': '<TMTAN>',
+                  b'\xa7\x07': '<TLTAN>', b'\xa7\x08': '<TYLW>',
+                  b'\xa7\x09': '<TBLCK>', b'\xa7\x0a': '<TGRAY>',
+                  b'\xa7\x0b': '<TPRPL>', b'\xa8\x00': '<VAR0>',
                   b'\xa8\x01': '<VAR1>', b'\xa8\x02': '<VAR2>',
                   b'\xa8\x03': '<VAR3>', b'\xa8\x04': '<VAR4>',
                   b'\xa8\x08': '<VAR8>', b'\xb0\x00': '<SAUTO0>',
@@ -168,27 +181,32 @@ DUMP_FLAG_DICT = {b'\xa0\xff': '<END>', b'\xa1\xff': '<LINE>',
                   b'\xb1\x04': '<EARTH>', b'\xb1\x05': '<LIGHT>',
                   b'\xb1\x06': '<DARK>', b'\xb1\x07': '<THNDR>',
                   b'\xb1\x08': '<NELEM>', b'\xb1\x09': '<NORM>',
-                  b'\xb2\x00': '<SBAT>', b'\xa5\x0f': '<STARTF>'}
+                  b'\xb2\x00': '<SBAT>'}
 INSERT_FLAG_DICT = {'<END>': b'\xff\xa0', '<LINE>': b'\xff\xa1',
                     '<WWWTS>': b'\xff\xa3', '<START0>': b'\x00\xa5',
                     '<START1>': b'\x01\xa5', '<START2>': b'\x02\xa5',
                     '<START3>': b'\x03\xa5', '<START4>': b'\x04\xa5',
                     '<START5>': b'\x05\xa5', '<STARTA>': b'\x0a\xa5',
-                    '<STARTF>': b'\x0f\xa5', '<TCLOSE>': b'\x00\xa7',
-                    '<SRED>': b'\x05\xa7', '<CHOICE>': b'\x08\xa7',
-                    '<VAR0>': b'\x00\xa8', '<VAR1>': b'\x01\xa8',
-                    '<VAR2>': b'\x02\xa8', '<VAR3>': b'\x03\xa8',
-                    '<VAR4>': b'\x04\xa8', '<VAR8>': b'\x08\xa8',
-                    '<SAUTO0>': b'\x00\xb0', '<SAUTO1>': b'\x01\xb0',
-                    '<SAUTO2>': b'\x02\xb0', '<SAUTO3>': b'\x03\xb0',
-                    '<SAUTO4>': b'\x04\xb0', '<SAUTO5>': b'\x05\xb0',
-                    '<SAUTO9>': b'\x09\xb0', '<SAUTOA>': b'\x0a\xb0',
-                    '<SAUTO1E>': b'\x1e\xb0', '<SCUT>': b'\xff\xb0',
-                    '<FIRE>': b'\x01\xb1', '<WATER>': b'\x02\xb1',
-                    '<WIND>': b'\x03\xb1', '<EARTH>': b'\x04\xb1',
-                    '<LIGHT>': b'\x05\xb1', '<DARK>': b'\x06\xb1',
-                    '<THNDR>': b'\x07\xb1', '<NELEM>': b'\x08\xb1',
-                    '<NORM>': b'\x09\xb1', '<SBAT>': b'\x00\xb2'}
+                    '<STARTF>': b'\x0f\xa5', '<TWHITE>': b'\x00\xa7',
+                    '<TDGRN>': b'\x01\xa7', '<TLGRN>': b'\x02\xa7',
+                    '<TCYAN>': b'\x03\xa7', '<TBRWN>': b'\x04\xa7',
+                    '<TRED>': b'\x05\xa7', '<TMTAN>': b'\x06\xa7',
+                    '<TLTAN>': b'\x07\xa7', '<TYLW>': b'\x08\xa7',
+                    '<TBLCK>': b'\x09\xa7', '<TGRAY': b'\x0a\xa7',
+                    '<TPRPL>': b'\x0b\xa7', '<VAR0>': b'\x00\xa8',
+                    '<VAR1>': b'\x01\xa8', '<VAR2>': b'\x02\xa8',
+                    '<VAR3>': b'\x03\xa8', '<VAR4>': b'\x04\xa8',
+                    '<VAR8>': b'\x08\xa8', '<SAUTO0>': b'\x00\xb0',
+                    '<SAUTO1>': b'\x01\xb0', '<SAUTO2>': b'\x02\xb0',
+                    '<SAUTO3>': b'\x03\xb0', '<SAUTO4>': b'\x04\xb0',
+                    '<SAUTO5>': b'\x05\xb0', '<SAUTO9>': b'\x09\xb0',
+                    '<SAUTOA>': b'\x0a\xb0', '<SAUTO1E>': b'\x1e\xb0',
+                    '<SCUT>': b'\xff\xb0', '<FIRE>': b'\x01\xb1',
+                    '<WATER>': b'\x02\xb1', '<WIND>': b'\x03\xb1',
+                    '<EARTH>': b'\x04\xb1', '<LIGHT>': b'\x05\xb1',
+                    '<DARK>': b'\x06\xb1', '<THNDR>': b'\x07\xb1',
+                    '<NELEM>': b'\x08\xb1', '<NORM>': b'\x09\xb1',
+                    '<SBAT>': b'\x00\xb2'}
 
 
 class PointerTable:

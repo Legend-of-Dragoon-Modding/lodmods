@@ -1227,12 +1227,12 @@ def extract_files(source_file, sector_padding=False, files_to_extract=('*',)):
 
     # Return if file does not exist or file size is 0.
     if not os.path.isfile(source_file):
-        print('Insert: File %s not found' % source_file)
-        print('Insert: Skipping file')
+        print('Extract: File %s not found' % source_file)
+        print('Extract: Skipping file')
         return
     elif not os.path.getsize(source_file):
-        print('Insert: %s is an empty file' % source_file)
-        print('Insert: Skipping file')
+        print('Extract: %s is an empty file' % source_file)
+        print('Extract: Skipping file')
         return
 
     with open(source_file, 'rb') as inf:
@@ -1324,7 +1324,7 @@ def _extraction_handler(source_file, sector_padding=False, files_to_extract=('*'
         return
 
     if not os.path.exists(source_file):
-        print('Decompress: %s does not exist' % source_file)
+        print('Extract: %s does not exist' % source_file)
         return
 
     source_file = source_file.upper()

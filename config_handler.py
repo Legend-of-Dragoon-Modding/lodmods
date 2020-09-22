@@ -585,7 +585,6 @@ def read_file_list(list_file, disc_dict, reverse=False, file_category='[ALL]',
             _merge_dicts, [val for key, val in file_list_dict.items()])}
 
     # Remove duplicate subfile numbers from files in file_list_dict.
-    # TODO: except for in BTTL.OV_ because additions
     for cat, cat_val in file_list_dict.items():
         for disc, disc_val in cat_val.items():
             for key, val in disc_val.items():
