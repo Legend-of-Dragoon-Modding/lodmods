@@ -40,7 +40,7 @@ def _def_path(file_system_object):
 
     if getattr(sys, 'frozen', False):
         # noinspection PyUnresolvedReferences,PyProtectedMember
-        return os.path.join(sys._MEIPASS, file_system_object)
+        return os.path.join(sys._MEIPASS, 'bin', file_system_object)
     else:
         return os.path.join(os.path.dirname(os.path.abspath(__file__)),
                             file_system_object)
@@ -140,7 +140,7 @@ def cdpatch(disc_dict, mode='-x'):
                                 '-f', '-d', disc_val[1][0],
                                 *disc_val[1][1]])
         except FileNotFoundError:
-            print('CDPatch: %s could not be found' % disc_val[0])
+            print('CDPatch: %s could not be found' % sys.exc_info()[1].filename)
 
 
 def psxmode(disc_dict, backup_discs=False):

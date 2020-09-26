@@ -778,6 +778,12 @@ def update_box_dimensions(csv_file):
         csvreader = csv.reader(f, delimiter='\t')
         updated_rows.append(next(csvreader))
         for row in csvreader:
+            # Make sure there are box dimensions to update first.
+            try:
+                row[4]
+            except IndexError:
+                continue
+                
             new_text = row[3]
             new_text = re.sub('<.*?>', '', new_text)
             new_text = re.sub('[{}]', '', new_text)
@@ -1434,7 +1440,7 @@ def insert_all(list_file, disc_dict, version='USA'):
                     if val[1][1]:
                         total_scripts += 1
 
-    # Insert text into each file listed in files_to_dump.
+    # Insert text into each file listed in files_to_insert.
     for file in sorted(files_to_insert):
         try:
             insert_text(file[0], file[6], file[2], file[3], file[4], file[5], version, True)
