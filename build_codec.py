@@ -13,7 +13,7 @@ def build_codecs():
 
     codecs.register(lod_ext_codec.getregentry)
 
-    with open('lod.tbl', 'r') as font_table:
+    with open('lod.tbl', 'r', encoding='utf-16') as font_table:
         standard_lookup_table = ''
         extended_lookup_table = ''
         i = -1

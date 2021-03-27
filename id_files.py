@@ -20,11 +20,14 @@ END_DLG_FLAG = re.compile(b'[\x00-\xff][\x00-\x05]\xff\xa0[\x00-\x26]\x00')
 # BPE and MRG searching won't work on an unpacked folder as these are never
 # base files, and get deleted in the unpacking process.
 FILETYPE_DICT = {'BPE': re.compile(b'^[\x00-\xff]{4}BPE\x1a'),
+                 'CLUT': re.compile(b'\x12\x00{3}'),
                  'DEFF': re.compile(b'^DEFF'),
                  'MCQ': re.compile(b'^MCQ'),
                  'MRG': re.compile(b'^MRG\x1a'),
+                 'PXL': re.compile(b'^\x11\x00{3}'),
                  'TIM': re.compile(b'^\x10\x00{3}'),
                  'TMD': re.compile(b'\x41\x00{3}'),
+                 'LMB': re.compile(b'\x43\x4d\x42'),
                  'TEXT': END_DLG_FLAG}
 
 
@@ -207,7 +210,7 @@ def id_file_type(dir_to_search, file_type=None, header_pattern=None,
             # If file_type is TEXT, search for the end token pattern through
             # the full file. Otherwise, just read the first 16 bytes to match
             # the header.
-            if file_type == 'TEXT':
+            if file_type == 'TEXT' or file_type == 'LMB':
                 data = f.read()
             else:
                 data = f.read(16)
