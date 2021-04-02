@@ -15,12 +15,6 @@ from game_file_handler import extract_files, extract_all_from_list, insert_files
     run_compression, unpack_all
 from id_files import id_file_type, build_index
 from text_handler import dump_text, dump_all, insert_text, insert_all
-"""import copy
-import glob
-import re
-import shutil
-import traceback
-from lod_patcher import update_mod_list, create_patches, patch"""
 
 
 def _hex(x):
@@ -128,13 +122,17 @@ def parse_arguments():
 
     # Create subparser for backup command.
     parser_b = subparsers.add_parser(
-        'backup', usage='%(prog)s file [-r]', description='''Creates a backup
-        files with the .orig extension for all listed files. If set to restore
-        from backup, the files will be replaced with the backup file, if both 
-        exist.''', help='Creates and restores files from backup')
+        'backup', usage='%(prog)s version [-d disc_list] [-r]',
+        description='''Creates backup files with the .orig 
+        extension for all listed files. If set to restore from
+        backup, the files will be replaced with the backup file,
+        if both exist.''',
+        help='Creates and restores files from backup')
 
     # Positional argument
-    parser_b.add_argument('input_files', nargs='+', help='Files to backup')
+    parser_b.add_argument('version', help='''Game version to back up''')
+    parser_b.add_argument('-d', '--disc', nargs='+', required=True, metavar='',
+                          help="Discs to back up (use integers or * for all)")
 
     # Optional argument
     parser_b.add_argument('-r', '--restore', action='store_true',
@@ -625,9 +623,14 @@ if __name__ == '__main__':
         if args.func == 'setup':
             args.config_setup(args.config_file, config_dict, args.version_list)
         elif args.func == 'backup':
-            for input_file in args.input_files:
-                print('Backing up %s' % input_file)
-                args.file_backup(input_file, args.restore_from_backup)
+            if args.disc[0] == '*':
+                args.disc = ['Disc 1', 'Disc 2', 'Disc 3', 'Disc 4']
+            else:
+                args.disc = [' '.join(('Disc', x)) for x in args.disc]
+            disc_dict = _build_disc_dict(config_dict, args.version, args.disc,
+                                         scripts_dir, game_files_dir)
+
+            args.file_backup(disc_dict, args.restore_from_backup)
         elif args.func == 'cdpatch':
             # TODO: Need to consider the case of all discs, and what this tool should be used for
             if args.disc[0] == '*':
@@ -750,89 +753,5 @@ if __name__ == '__main__':
             disc_dict = _build_disc_dict(config_dict, args.version, disc_list, args.script_folder, 
                                          game_files_dir)
             args.insert_all(file, disc_dict, args.version)
-        """elif args.func == 'createpatch':
-            list_file = config_dict['[File Lists]'][args.version]
-            disc_dict = {}
-            for disc, val in config_dict['[Game Discs]'][args.version].items():
-                if (disc != 'All Discs' and
-                    config_dict['[Game Discs]'][args.version][disc][0] != '') \
-                        or (disc == 'All Discs' and
-                            config_dict['[Game Discs]'][args.version]['Disc 4'][0] != ''):
-                    img = config_dict['[Game Discs]'][args.version][disc][0] \
-                        if disc != 'All Discs' \
-                        else config_dict['[Game Discs]'][args.version]['Disc 4'][0]
-                    disc_dir = os.path.join(args.version, disc)
-                    disc_dict[disc] = [
-                        os.path.join(config_dict['[Game Directories]'][args.version], img),
-                        [os.path.join(game_files_dir, disc_dir),
-                         config_dict['[Game Discs]'][args.version][disc][1]]]
-            args.create_patches(list_file, game_files_dir, patch_dir, disc_dict)
-        elif args.func == 'patch':
-            print('\n---------------------------------------------\n'
-                  'LODModS Patcher v 1.31 - (c) theflyingzamboni\n'
-                  '---------------------------------------------\n')
-            print('----------------------------\n'
-                  'Additional Credits:\n'
-                  'CDPatch - (c) Neill Corlett\n'
-                  'PSX-Mode2 - (c) CUE\n'
-                  'Xdelta3 - (c) Josh MacDonald\n\n'
-                  'Links can be found in readme\n'
-                  '----------------------------\n')
-
-            version_list = (args.swap, args.version)
-
-            try:
-                config_setup(args.config_file, config_dict, [x for x in version_list if x], True)
-                update_mod_list(args.config_file, config_dict, version_list)
-
-                disc_dict_pair = []
-                for version in version_list:
-                    disc_dict = {}
-                    if version is not None:
-                        for disc in config_dict['[Game Discs]'][version].keys():
-                            if (disc != 'All Discs' and
-                                config_dict['[Game Discs]'][version][disc][0] != '') \
-                                    or (disc == 'All Discs' and
-                                        config_dict['[Game Discs]'][version]['Disc 4'][0] != ''):
-                                img = config_dict['[Game Discs]'][version][disc][0] \
-                                    if disc != 'All Discs' \
-                                    else config_dict['[Game Discs]'][version]['Disc 4'][0]
-                                disc_dir = os.path.join(version, disc)
-                                disc_dict[disc] = [
-                                    os.path.join(config_dict['[Game Directories]'][version], img),
-                                    [os.path.join(game_files_dir, disc_dir),
-                                     config_dict['[Game Discs]'][version][disc][1]]]
-                    disc_dict_pair.append(disc_dict)
-
-                list_file = config_dict['[File Lists]'][args.version]
-                update_file_list(list_file, config_dict, disc_dict_pair[1])
-
-                for mod, mod_val in config_dict['[Mod List]'].items():
-                    if not mod_val:
-                        continue
-                    for file in glob.glob(os.path.join(mod, 'patches', '**', '*.xdelta'),
-                                          recursive=True):
-                        patch_list.append(file)
-
-                print()
-                args.patch(list_file, disc_dict_pair, copy.deepcopy(patch_list))
-
-                if args.delete:
-                    try:
-                        shutil.rmtree(game_files_dir)
-                    except PermissionError:
-                        print('LODModS: Could not delete %s' % game_files_dir)
-            except FileNotFoundError:
-                print(traceback.format_exc())
-                print('LODModS: %s not found' % sys.exc_info()[1].filename)
-            except SystemExit:
-                pass
-            finally:
-                block_range_pattern = re.compile(r'(\.{\d+-\d+})')
-                for patch in patch_list:
-                    backup = '.'.join((patch, 'orig'))
-                    if block_range_pattern.search(patch) and os.path.exists(backup):
-                        backup_file(patch, True)
-                        os.remove(backup)"""
     except KeyboardInterrupt:
         print('\n')
