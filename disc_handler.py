@@ -46,7 +46,7 @@ def _def_path(file_system_object):
                             file_system_object)
 
 
-def backup_file(disc_dict, restore_from_backup=False):
+def backup_file(input_file, restore_from_backup=False):
     """
     Creates/restores disc image backup.
 
@@ -67,15 +67,14 @@ def backup_file(disc_dict, restore_from_backup=False):
 
     # DO NOT DELETE .orig file if .bin file has been modified
 
-    for disc, disc_val in disc_dict.items():
-        input_backup = ''.join((disc_val[0], '.orig'))
+    input_backup = ''.join((input_file, '.orig'))
 
-        if not os.path.exists(input_backup):
-            print(f'Backing up {disc_val[0]}')
-            shutil.copy(disc_val[0], input_backup)
-        elif restore_from_backup:
-            print(f'Restoring {disc_val[0]} from backup')
-            shutil.copy(input_backup, disc_val[0])
+    if not os.path.exists(input_backup):
+        print(f'Backing up {input_file}')
+        shutil.copy(input_file, input_backup)
+    elif restore_from_backup:
+        print(f'Restoring {input_file} from backup')
+        shutil.copy(input_backup, input_file)
 
 
 def cdpatch(disc_dict, mode='-x'):

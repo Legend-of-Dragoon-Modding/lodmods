@@ -630,7 +630,8 @@ if __name__ == '__main__':
             disc_dict = _build_disc_dict(config_dict, args.version, args.disc,
                                          scripts_dir, game_files_dir)
 
-            args.file_backup(disc_dict, args.restore_from_backup)
+            for disc, disc_val in disc_dict.items():
+                args.file_backup(disc_val[0], args.restore_from_backup)
         elif args.func == 'cdpatch':
             # TODO: Need to consider the case of all discs, and what this tool should be used for
             if args.disc[0] == '*':
