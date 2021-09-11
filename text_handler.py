@@ -1122,16 +1122,16 @@ def insert_text(file, csv_file, ptr_tbl_starts, ptr_tbl_ends,
     with open(csv_file, 'r', encoding='utf-16', newline='') as inf:
         csvreader = csv.reader(inf, delimiter='\t')
         for row in csvreader:
-            if basename.upper() in row[0].upper() and 'additions' in row[0]:
-                row[3] = row[3].replace('\u2018', '\u0027').replace('\u2019', '\u0027')
-                row[3] = row[3].replace('\u201c', '\u0022').replace('\u201d', '\u0022')
-                additions_list.append([int(row[1]), row[3]])
-            elif basename.upper() in row[0].upper():
+            if basename.upper() == row[0].upper():
                 row[3] = row[3].replace('\n', '')
                 row[3] = row[3].replace('\u2018', '\u0027').replace('\u2019', '\u0027')
                 row[3] = row[3].replace('\u201c', '\u0022').replace('\u201d', '\u0022')
                 row[4] = row[4].replace(' ', '00')
                 text_list.append([int(row[1]), row[3], row[4]])
+            elif 'additions' in row[0]:
+                row[3] = row[3].replace('\u2018', '\u0027').replace('\u2019', '\u0027')
+                row[3] = row[3].replace('\u201c', '\u0022').replace('\u201d', '\u0022')
+                additions_list.append([int(row[1]), row[3]])
         additions_list.sort()
         additions_block = '\n\n'.join([x[1] for x in additions_list])
         text_list.sort(reverse=True)

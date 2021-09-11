@@ -46,7 +46,7 @@ def _def_path(file_system_object):
                             file_system_object)
 
 
-def backup_file(input_file, restore_from_backup=False):
+def backup_file(input_file, restore_from_backup=False, print_message=False):
     """
     Creates/restores disc image backup.
 
@@ -62,7 +62,9 @@ def backup_file(input_file, restore_from_backup=False):
         Path/name of file to be backed up/restored from backup.
     restore_from_backup : boolean
         Flag determining whether file should be restored from clean backup
-        (default: False)
+        (default: False).
+    print_message : boolean
+        Flag determining whether to print output (default: False).
     """
 
     # DO NOT DELETE .orig file if .bin file has been modified
@@ -70,10 +72,12 @@ def backup_file(input_file, restore_from_backup=False):
     input_backup = ''.join((input_file, '.orig'))
 
     if not os.path.exists(input_backup):
-        print(f'Backing up {input_file}')
+        if print_message:
+            print(f'Backing up {input_file}')
         shutil.copy(input_file, input_backup)
     elif restore_from_backup:
-        print(f'Restoring {input_file} from backup')
+        if print_message:
+            print(f'Restoring {input_file} from backup')
         shutil.copy(input_backup, input_file)
 
 
@@ -201,10 +205,10 @@ def psxmode(disc_dict, backup_discs=False):
         try:
             if not os.path.exists('.'.join((disc_val[0], 'orig'))):
                 print('\nPSXMode: Creating %s backup\n' % disc)
-                backup_file(disc_val[0], backup_discs)
+                backup_file(disc_val[0], backup_discs, True)
             elif backup_discs:
                 print('\nPSXMode: Restoring %s backup\n' % disc)
-                backup_file(disc_val[0], backup_discs)
+                backup_file(disc_val[0], backup_discs, True)
 
             files_to_insert = disc_val[1]
             for j, file in enumerate(files_to_insert):
