@@ -149,14 +149,6 @@ OV_TEXT_ENDS = {'SCUS': {'BTTL.OV_': [0x34ce4],
                          'SCPS_101.21': [],
                          'SCPS_101.22': []}}
 END_FLAG = re.compile(b'\xff\xa0')
-STARDUST_PATTERN = re.compile(b'\x1f\x00\x3b\x00\x49\x00\x4d\x00\x41\x00'
-                              b'\x4a\x00\x3d\x00\x3c\x00\x00\x00\x05\xa7'
-                              b'\x31\x00\x4c\x00\x39\x00\x4a\x00\x3c\x00'
-                              b'\x4d\x00\x4b\x00\x4c\x00\x00\xa7\x00\x00'
-                              b'\xff\xa0')
-FUNDS_PATTERN = re.compile(b'\\x24\x00\x4d\x00\x46\x00\x3c\x00\x4b\x00'
-                           b'\x00\x00\x00\xa8\x25\x00\xff\xa0')
-FFCODE_PATTERN = re.compile(b'\xff\xff\xff\xff\\x09\x00\x00\x00\xff\xff\xff\xff')
 DUMP_FLAG_DICT = {b'\xa0\xff': '<END>', b'\xa1\xff': '<LINE>',
                   b'\xa3\xff': '<WWWTS>', b'\xa5\x00': '<START0>',
                   b'\xa5\x01': '<START1>', b'\xa5\x02': '<START2>',
@@ -171,17 +163,17 @@ DUMP_FLAG_DICT = {b'\xa0\xff': '<END>', b'\xa1\xff': '<LINE>',
                   b'\xa7\x0b': '<TPRPL>', b'\xa8\x00': '<VAR0>',
                   b'\xa8\x01': '<VAR1>', b'\xa8\x02': '<VAR2>',
                   b'\xa8\x03': '<VAR3>', b'\xa8\x04': '<VAR4>',
-                  b'\xa8\x08': '<VAR8>', b'\xb0\x00': '<SAUTO0>',
-                  b'\xb0\x01': '<SAUTO1>', b'\xb0\x02': '<SAUTO2>',
-                  b'\xb0\x03': '<SAUTO3>', b'\xb0\x04': '<SAUTO4>',
-                  b'\xb0\x05': '<SAUTO5>', b'\xb0\x09': '<SAUTO9>',
-                  b'\xb0\x0a': '<SAUTOA>', b'\xb0\x1e': '<SAUTO1E>',
-                  b'\xb0\xff': '<SCUT>', b'\xb1\x01': '<FIRE>',
-                  b'\xb1\x02': '<WATER>', b'\xb1\x03': '<WIND>',
-                  b'\xb1\x04': '<EARTH>', b'\xb1\x05': '<LIGHT>',
-                  b'\xb1\x06': '<DARK>', b'\xb1\x07': '<THNDR>',
-                  b'\xb1\x08': '<NELEM>', b'\xb1\x09': '<NORM>',
-                  b'\xb2\x00': '<SBAT>'}
+                  b'\xa8\x08': '<VAR8>', b'\xa8\x09': '<VAR9>',
+                  b'\xb0\x00': '<SAUTO0>', b'\xb0\x01': '<SAUTO1>',
+                  b'\xb0\x02': '<SAUTO2>', b'\xb0\x03': '<SAUTO3>',
+                  b'\xb0\x04': '<SAUTO4>', b'\xb0\x05': '<SAUTO5>',
+                  b'\xb0\x09': '<SAUTO9>', b'\xb0\x0a': '<SAUTOA>',
+                  b'\xb0\x1e': '<SAUTO1E>', b'\xb0\xff': '<SCUT>',
+                  b'\xb1\x01': '<FIRE>', b'\xb1\x02': '<WATER>',
+                  b'\xb1\x03': '<WIND>', b'\xb1\x04': '<EARTH>',
+                  b'\xb1\x05': '<LIGHT>', b'\xb1\x06': '<DARK>',
+                  b'\xb1\x07': '<THNDR>', b'\xb1\x08': '<NELEM>',
+                  b'\xb1\x09': '<NORM>', b'\xb2\x00': '<SBAT>'}
 INSERT_FLAG_DICT = {'<END>': b'\xff\xa0', '<LINE>': b'\xff\xa1',
                     '<WWWTS>': b'\xff\xa3', '<START0>': b'\x00\xa5',
                     '<START1>': b'\x01\xa5', '<START2>': b'\x02\xa5',
@@ -196,17 +188,17 @@ INSERT_FLAG_DICT = {'<END>': b'\xff\xa0', '<LINE>': b'\xff\xa1',
                     '<TPRPL>': b'\x0b\xa7', '<VAR0>': b'\x00\xa8',
                     '<VAR1>': b'\x01\xa8', '<VAR2>': b'\x02\xa8',
                     '<VAR3>': b'\x03\xa8', '<VAR4>': b'\x04\xa8',
-                    '<VAR8>': b'\x08\xa8', '<SAUTO0>': b'\x00\xb0',
-                    '<SAUTO1>': b'\x01\xb0', '<SAUTO2>': b'\x02\xb0',
-                    '<SAUTO3>': b'\x03\xb0', '<SAUTO4>': b'\x04\xb0',
-                    '<SAUTO5>': b'\x05\xb0', '<SAUTO9>': b'\x09\xb0',
-                    '<SAUTOA>': b'\x0a\xb0', '<SAUTO1E>': b'\x1e\xb0',
-                    '<SCUT>': b'\xff\xb0', '<FIRE>': b'\x01\xb1',
-                    '<WATER>': b'\x02\xb1', '<WIND>': b'\x03\xb1',
-                    '<EARTH>': b'\x04\xb1', '<LIGHT>': b'\x05\xb1',
-                    '<DARK>': b'\x06\xb1', '<THNDR>': b'\x07\xb1',
-                    '<NELEM>': b'\x08\xb1', '<NORM>': b'\x09\xb1',
-                    '<SBAT>': b'\x00\xb2'}
+                    '<VAR8>': b'\x08\xa8', '<VAR9>': b'\x09\xa8',
+                    '<SAUTO0>': b'\x00\xb0', '<SAUTO1>': b'\x01\xb0',
+                    '<SAUTO2>': b'\x02\xb0', '<SAUTO3>': b'\x03\xb0',
+                    '<SAUTO4>': b'\x04\xb0', '<SAUTO5>': b'\x05\xb0',
+                    '<SAUTO9>': b'\x09\xb0', '<SAUTOA>': b'\x0a\xb0',
+                    '<SAUTO1E>': b'\x1e\xb0', '<SCUT>': b'\xff\xb0',
+                    '<FIRE>': b'\x01\xb1', '<WATER>': b'\x02\xb1',
+                    '<WIND>': b'\x03\xb1', '<EARTH>': b'\x04\xb1',
+                    '<LIGHT>': b'\x05\xb1', '<DARK>': b'\x06\xb1',
+                    '<THNDR>': b'\x07\xb1', '<NELEM>': b'\x08\xb1',
+                    '<NORM>': b'\x09\xb1', '<SBAT>': b'\x00\xb2'}
 
 
 class PointerTable:
@@ -370,15 +362,24 @@ class PointerTable:
         if self.hi_bytes[index] is None:
             new_ptr = (file.tell() - tbl_start) >> 2
         elif self.hi_bytes[index] & 0x09000000 == 0x09000000:
-            offset_adjustment = self.hi_bytes[index] ^ 0x09000000
+            if ptr_type == 'box':
+                if self.tbl_starts[index] - self.box_tbl_starts[index] == 36:
+                    offset_adjustment = (self.hi_bytes[index] ^ 0x09000000) - 20
+                else:
+                    offset_adjustment = (self.hi_bytes[index] ^ 0x09000000) - 8
+            else:
+                offset_adjustment = self.hi_bytes[index] ^ 0x09000000
             new_ptr = ((file.tell() - tbl_start + offset_adjustment)
-                       >> 2) | 0x09000000
+                       >> 2) | 0x09000000 if ptr_type == 'txt' \
+                else ((file.tell() - tbl_start + offset_adjustment)
+                      >> 2)
         elif self.hi_bytes[index] == 0x80000000:
             new_ptr = (file.tell() + self.offset_diffs[index]) \
                       | self.hi_bytes[index]
         else:
-            new_ptr = (file.tell() + self.offset_diffs[index] ^ 0x110000)\
+            new_ptr = ((file.tell() + self.offset_diffs[index] ^ 0x110000) & 0xffff)\
                       | self.hi_bytes[index]
+
         if new_ptr > 0x80000000:
             new_ptr = new_ptr.to_bytes(4, 'little')
         else:
@@ -447,6 +448,7 @@ def _get_rel_pointers(file, ptr_tbl_starts, ptr_tbl_ends, single_ptr_tbl):
         while curr_rel_offset < tbl_length:
             file.seek(start + curr_rel_offset)
             offset_adjustment = 0x00
+            box_ptr_offset_adjustment = 0x00
             raw_ptr = file.read(4)
             if raw_ptr[3] == 0x09:
                 test_bytes = file.read(8)
@@ -458,8 +460,16 @@ def _get_rel_pointers(file, ptr_tbl_starts, ptr_tbl_ends, single_ptr_tbl):
                     if test_bytes ==\
                             b'\x38\x06\xc6\x00\x00\x00\x00\x00\x40\x00\x00\x0f':
                         offset_adjustment += 0x1c
+                        box_ptr_offset_adjustment = 0x24
+                        box_tbl_start = start - box_ptr_offset_adjustment
+                    elif test_bytes ==\
+                            b'\x03\x00\x00\x00\x00\x00\x00\x01\x11\x01\x00\x00':
+                        offset_adjustment += 0x20
+                        # Correction hacks for the condition where there are box pointers
+                        box_ptr_offset_adjustment = 8
+                        box_tbl_start = start - box_ptr_offset_adjustment
                     else:
-                        print('Invalid pointer at %d.' % start+curr_rel_offset)
+                        print(f'Invalid pointer at {start+curr_rel_offset}.')
                         raise ValueError
                 extra_bytes = 0x09000000 | offset_adjustment
                 ptr = int.from_bytes(raw_ptr[:3], 'little')
@@ -475,6 +485,18 @@ def _get_rel_pointers(file, ptr_tbl_starts, ptr_tbl_ends, single_ptr_tbl):
                 ptr_tbl.append_attributes(
                     ptr, start + curr_rel_offset, start, extra_bytes,
                     box_ptr=box_ptr, box_ptr_loc=box_tbl_start + curr_rel_offset,
+                    box_tbl_start=box_tbl_start)
+            elif single_ptr_tbl[index] in (3, 4):
+                file.seek(start - box_ptr_offset_adjustment)
+                if single_ptr_tbl[index] == 3:
+                    box_ptr = struct.unpack('<i', file.read(4))[0] ^ 0x09000000
+                    box_ptr = (box_ptr << 2) + box_tbl_start - 8
+                else:
+                    box_ptr = struct.unpack('<i', file.read(4))[0] ^ 0x13000000
+                    box_ptr = (box_ptr << 2) + box_tbl_start - (offset_adjustment - 8)
+                ptr_tbl.append_attributes(
+                    ptr, start + curr_rel_offset, start, extra_bytes,
+                    box_ptr=box_ptr, box_ptr_loc=box_tbl_start,
                     box_tbl_start=box_tbl_start)
             else:
                 ptr_tbl.append_attributes(
@@ -564,7 +586,7 @@ def _get_abs_pointers(file, ptr_tbl_starts, ptr_tbl_ends, text_starts):
         extra_bytes = 0x80000000
         while curr_rel_offset < tbl_length:
             ptr = file.read(4)
-            if ptr[3:] == b'\x80':
+            if ptr[3:] == b'\x80' and ptr[2:3] != b'\x00':
                 ptr = int.from_bytes(ptr[:3], 'little')
             else:  # WMAP has non-pointer values in table to skip.
                 curr_rel_offset += 0x04
@@ -785,14 +807,15 @@ def update_box_dimensions(csv_file):
                 continue
                 
             new_text = row[3]
-            new_text = re.sub('<.*?>', '', new_text)
             new_text = re.sub('[{}]', '', new_text)
             new_text_list = new_text.split('\n')
             num_lines = f'{len(new_text_list):02x}'
             max_line_len = 0
             for line in new_text_list:
-                if len(line) > max_line_len:
-                    max_line_len = len(line)
+                extra_var_len = 8 * len(re.findall('<VAR.>', line))
+                line_len = len(re.sub('<.*?>', '', line)) + extra_var_len
+                if line_len > max_line_len:
+                    max_line_len = line_len
             else:
                 max_line_len = f'{max_line_len:02x}'
 
@@ -1136,6 +1159,7 @@ def insert_text(file, csv_file, ptr_tbl_starts, ptr_tbl_ends,
         additions_block = '\n\n'.join([x[1] for x in additions_list])
         text_list.sort(reverse=True)
 
+    file_size = os.path.getsize(file)
     with open(file, 'rb+') as outf:
         data = mmap.mmap(outf.fileno(), 0)
 
@@ -1151,9 +1175,8 @@ def insert_text(file, csv_file, ptr_tbl_starts, ptr_tbl_ends,
                 # Make sure not to overflow addition block
                 addition_block_size = add_tbl_end - add_tbl_start
                 if len(additions_block) > addition_block_size:
-                    print('Insert: Length of text exceeds size of addition block'
-                          'by %d bytes.' %
-                          (len(additions_block) - addition_block_size))
+                    print(f'Insert: Length of text exceeds size of addition block ' 
+                          f'by {len(additions_block)-addition_block_size} bytes.')
                     return
 
                 outf.seek(add_tbl_start)
@@ -1189,15 +1212,16 @@ def insert_text(file, csv_file, ptr_tbl_starts, ptr_tbl_ends,
 
         outf.seek(0)
 
-        # Check for weird code like at end of DRGN21_97_2, and set the start
-        # and end offsets of the code if it's found.
-        ffcode = FFCODE_PATTERN.search(data)
-        if bool(ffcode):
-            ffcode_loc_start = ffcode.start() - 2
-            ffcode_loc_end = ffcode_loc_start + 14
-        else:
-            ffcode_loc_start = None
-            ffcode_loc_end = None
+        # Check for extra code following text.
+        extra_code_start = None
+        extra_code_end = None
+        if ptr_list.txt_starts[index] is None:
+            final_end_flag_loc = data.rfind(b'\xff\xa0')
+            text_end = final_end_flag_loc + 10 if final_end_flag_loc % 4 \
+                else final_end_flag_loc + 12
+            if text_end < file_size:
+                extra_code_start = text_end
+                extra_code_end = file_size
 
         # Jump to first pointer address.
         curr_txt_offset = ptr_list.ptrs[0]
@@ -1257,10 +1281,10 @@ def insert_text(file, csv_file, ptr_tbl_starts, ptr_tbl_ends,
                 # longer than original, OR adjust current offset location if text
                 # in an OV will overflow its current text block.
                 text_len = len(char_list_to_write) * 2
-                if ffcode_loc_start and \
-                        (curr_txt_offset + text_len + 8 > ffcode_loc_start):
-                    curr_txt_offset = ffcode_loc_end
-                    ffcode_loc_start = None
+                if extra_code_start is not None and \
+                        (curr_txt_offset + text_len + 8 > extra_code_start):
+                    curr_txt_offset = extra_code_end
+                    extra_code_start = None
                 elif combat_ptrs:
                     orig_text_len = ptr_list.box_ptrs[index] - ptr
                     if text_len < orig_text_len:
@@ -1338,7 +1362,16 @@ def insert_text(file, csv_file, ptr_tbl_starts, ptr_tbl_ends,
             outf.write(ptr_list.ptrs[index])
             if ptr_list.box_ptr_locs[index] is not None:
                 outf.seek(ptr_list.box_ptr_locs[index])
-                outf.write(ptr_list.box_ptrs[index])
+                new_box_ptr = ptr_list.box_ptrs[index]
+
+                # Create and write extra box pointer for single_ptr_tbl = 3.
+                if ptr_list.box_tbl_starts[index] < ptr_list.tbl_starts[index]:
+                    if ptr_list.tbl_starts[index] - ptr_list.box_tbl_starts[index] == 36:
+                        new_box_ptr = b''.join((new_box_ptr[:2], b'\x00\x09'))
+                    else:
+                        outf.write(b''.join((new_box_ptr[:2], b'\x00\x13')))
+                        new_box_ptr = b''.join((new_box_ptr[:2], b'\x01\x13'))
+                outf.write(new_box_ptr)
 
 
 def insert_all(list_file, disc_dict, version='USA'):
