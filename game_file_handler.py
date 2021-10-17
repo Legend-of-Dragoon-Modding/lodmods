@@ -32,8 +32,9 @@ Copyright (C) 2019 theflyingzamboni
 
 import colorama
 import glob
-import multiprocessing
+from math import ceil
 from more_itertools import sort_together
+import multiprocessing
 import os
 import random
 import re
@@ -1578,11 +1579,9 @@ def _insert_helper(src_file, lba_table, file_nums, sector_padding,
             # the LBA entries are updated.
             file_size = os.path.getsize(input_file)
             if (num == len(lba_table)
-                    or (file_size <= lba_table.file_sizes[num - 1]
-                        + (0x800 - lba_table.file_sizes[num - 1] % 0x800)
+                    or (file_size <= ceil(lba_table.file_sizes[num - 1] / 0x800) * 0x800
                         and sector_padding)
-                    or (file_size <= lba_table.file_sizes[num - 1]
-                        + (0x04 - lba_table.file_sizes[num - 1] % 0x04)
+                    or (file_size <= ceil(lba_table.file_sizes[num - 1] / 4) * 4
                         and not sector_padding)):
                 src_file.seek(lba_table.file_locs[num - 1])
                 src_file.write(inf.read())
