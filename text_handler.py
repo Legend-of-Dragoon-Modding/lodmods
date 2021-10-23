@@ -452,7 +452,8 @@ def _get_rel_pointers(file, ptr_tbl_starts, ptr_tbl_ends, single_ptr_tbl):
             raw_ptr = file.read(4)
             if raw_ptr[3] == 0x09:
                 test_bytes = file.read(8)
-                if test_bytes == b'\x49\x00\x00\x00\x38\x01\xc0\x00':
+                if test_bytes == b'\x49\x00\x00\x00\x38\x01\xc0\x00' \
+                        or test_bytes == b'\x40\x01\x00\x00\x0d\x00\x00\x09':
                     offset_adjustment += 0x28
                 else:
                     file.seek(file.tell()-0x28)
@@ -813,7 +814,11 @@ def update_box_dimensions(csv_file):
             max_line_len = 0
             for line in new_text_list:
                 extra_var_len = 8 * len(re.findall('<VAR.>', line))
-                line_len = len(re.sub('<.*?>', '', line)) + extra_var_len
+                line_len = len(re.sub('<.*?>', '', line))
+                if line_len == 0:
+                    line_len = 1
+                else:
+                    line_len += extra_var_len
                 if line_len > max_line_len:
                     max_line_len = line_len
             else:
@@ -1276,8 +1281,7 @@ def insert_text(file, csv_file, ptr_tbl_starts, ptr_tbl_ends,
                     else:
                         sys.exit(4)
 
-                # Adjust current offset location if line + box size will overwrite
-                # FFCODE, OR adjust current offset location if battle text line
+                # Adjust current offset location if battle text line
                 # longer than original, OR adjust current offset location if text
                 # in an OV will overflow its current text block.
                 text_len = len(char_list_to_write) * 2
@@ -1335,6 +1339,7 @@ def insert_text(file, csv_file, ptr_tbl_starts, ptr_tbl_ends,
                     # Game hard codes box dimensions location in battle/cutscene files
                     # Always update values in original position for them.
                     if combat_ptrs:
+                        outf.write(bytes.fromhex(text_block[2]))
                         outf.seek(ptr_list.box_ptrs[index])
                         outf.write(bytes.fromhex(text_block[2]))
                     else:
