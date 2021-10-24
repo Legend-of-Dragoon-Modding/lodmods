@@ -391,7 +391,7 @@ def parse_arguments():
 
     # Create subparser for unpack command.
     parser_u = subparsers.add_parser(
-        'unpack', usage='%(prog)s source_file', description='''Disassembles
+        'unpack', usage='%(prog)s source_file [-p] [-d]', description='''Disassembles
         the given MRG source file into its bottom-level component files.
         This function also deletes all intermediary files, so that the 
         created folder can be used with the id_file_type function to
@@ -407,6 +407,10 @@ def parse_arguments():
     parser_u.add_argument('-p', '--padding', action='store_true',
                           dest='sector_padded', help='''Indicate whether
                           file is sector-aligned (default: False)''')
+    parser_u.add_argument('-d', '--delete', action='store_true',
+                          dest='delete_empty_files', help='''Indicate 
+                          whether to delete files less than 8 bytes
+                          long (default: False) (not currently working)''')
     parser_u.set_defaults(unpack_all=unpack_all)
 
     # Create subparser for swap command.
@@ -689,7 +693,7 @@ if __name__ == '__main__':
             args.insert_all_from_list(file, disc_dict, args.file_category,
                                       args.del_component_folders)
         elif args.func == 'unpack':
-            args.unpack_all(args.source_file, args.sector_padded)
+            args.unpack_all(args.source_file, args.sector_padded, args.delete_empty_files)
         elif args.func == 'swap':
             args.file_swap(args.src_file, args.dest_file)
         elif args.func == 'swapall':

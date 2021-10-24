@@ -1125,11 +1125,11 @@ class LBATable:
         source_file : BufferedReader
             MRG file that files are being extracted from/inserted into
         """
-        curr_offset = 0x08
-        source_file.seek(curr_offset)
 
-        while curr_offset < self.lba_table_len + 0x08:
-            self.ptr_locs.append(curr_offset)
+        source_file.seek(0x08)
+
+        for file_num in range(self.num_files):
+            self.ptr_locs.append(source_file.tell())
 
             loc = int.from_bytes(source_file.read(4), 'little')
             if self.sector_padding:
@@ -1140,8 +1140,6 @@ class LBATable:
 
             size = source_file.read(4)
             self.file_sizes.append(int.from_bytes(size, 'little'))
-
-            curr_offset += 0x08
 
         self.file_locs, self.file_sizes, self.ptr_locs = \
             sort_together(
@@ -1248,11 +1246,16 @@ def extract_files(source_file, sector_padding=False, files_to_extract=('*',)):
 
         # Read LBA table
         lba_list = LBATable(inf, sector_padding)
+        if lba_list.num_files == 0:
+            return
         lba_list.read_lba_table(inf)
 
         # Get list of files to extract. Return if empty.
-        file_nums = parse_input(files_to_extract, len(lba_list.file_locs))
+        file_nums = parse_input(files_to_extract, lba_list.num_files)
         if not file_nums:
+            # Probably redundant, but might catch case of
+            # someone including a file without any file numbers
+            # TODO: Figure out what happens when file number left out of config
             return
 
         # Create output directory
@@ -1822,7 +1825,7 @@ def insert_all_from_list(list_file, disc_dict, file_category='[ALL]',
     print('\nInsert: Complete')
 
 
-def unpack_all(source_file, sector_padded=False):
+def unpack_all(source_file, sector_padded=False, delete_empty_files=False):
     """
     Fully unpacks a MRG file into all of its component files.
 
@@ -1842,6 +1845,10 @@ def unpack_all(source_file, sector_padded=False):
     ----------
     source_file : str
         Name of file to be unpacked.
+    sector_padded : bool
+        Whether the file being unpacked is sector aligned (default: False).
+    delete_empty_files : bool
+        Whether to delete files less than 8 bytes long (default: False).
     """
 
     # Check that source file exists and contains data.
@@ -1870,12 +1877,13 @@ def unpack_all(source_file, sector_padded=False):
                      os.walk(dir_to_search) for f in fn]
         for file in file_list:
             # Delete all empty files.
-            if os.path.getsize(file) <= 8:
+            if delete_empty_files and os.path.getsize(file) <= 8:
                 os.remove(file)
                 continue
 
             # Read the header of the file.
             with open(file, 'rb') as f:
+                print(f.name)
                 header = f.read(8)
 
             # If the file is a MRG, extract all subfiles, then delete the
