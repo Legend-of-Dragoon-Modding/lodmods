@@ -1285,17 +1285,17 @@ def insert_text(file, csv_file, ptr_tbl_starts, ptr_tbl_ends,
                 # longer than original, OR adjust current offset location if text
                 # in an OV will overflow its current text block.
                 text_len = len(char_list_to_write) * 2
-                if extra_code_start is not None and \
-                        (curr_txt_offset + text_len + 8 > extra_code_start):
-                    curr_txt_offset = extra_code_end
-                    extra_code_start = None
-                elif combat_ptrs:
+                if combat_ptrs:
                     orig_text_len = ptr_list.box_ptrs[index] - ptr
                     if text_len < orig_text_len:
                         padding = b'\x00' * (orig_text_len - text_len)
                         char_list_to_write.append(padding)
                     elif text_len > orig_text_len:
                         curr_txt_offset = os.path.getsize(file)
+                elif extra_code_start is not None and \
+                        (curr_txt_offset + text_len + 8 > extra_code_start):
+                    curr_txt_offset = extra_code_end
+                    extra_code_start = None
                 elif ov_text_starts is not None:
                     if curr_txt_offset + text_len + 4 \
                             > OV_TEXT_ENDS[version][file_key][curr_text_block]:
@@ -1338,11 +1338,9 @@ def insert_text(file, csv_file, ptr_tbl_starts, ptr_tbl_ends,
                 if text_block[2]:
                     # Game hard codes box dimensions location in battle/cutscene files
                     # Always update values in original position for them.
+                    outf.write(bytes.fromhex(text_block[2]))
                     if combat_ptrs:
-                        outf.write(bytes.fromhex(text_block[2]))
                         outf.seek(ptr_list.box_ptrs[index])
-                        outf.write(bytes.fromhex(text_block[2]))
-                    else:
                         outf.write(bytes.fromhex(text_block[2]))
 
                 curr_txt_offset = outf.tell()
