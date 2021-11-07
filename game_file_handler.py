@@ -23,7 +23,7 @@ both [extract_from_list() and insert_from_list()].
 
 File swapping
 -------------
-This set of fucntions deals with swapping game files between different versions
+This set of functions deals with swapping game files between different versions
 of LoD (e.g. Japanese to US), and likewise has a function to swap multiple files
 using a file list text file.
 
@@ -1101,6 +1101,7 @@ class LBATable:
         sector_padding : boolean
             Value stating whether the MRG file uses '0x8c' sector padding.
         """
+
         source_file.seek(4)
         self.sector_padding = sector_padding
         self.num_files = int.from_bytes(source_file.read(4), 'little')
@@ -1253,10 +1254,7 @@ def extract_files(source_file, sector_padding=False, files_to_extract=('*',)):
         # Get list of files to extract. Return if empty.
         file_nums = parse_input(files_to_extract, lba_list.num_files)
         if not file_nums:
-            # Probably redundant, but might catch case of
-            # someone including a file without any file numbers
-            # TODO: Figure out what happens when file number left out of config
-            return
+            return  # Exit function early if no files to extract.
 
         # Create output directory
         output_dir = '_'.join((os.path.splitext(source_file)[0], 'dir'))
@@ -1386,8 +1384,7 @@ def extract_all_from_list(list_file, disc_dict, file_category='[ALL]'):
     # categories of the file list txt file. Each category can also be
     # specified individually.
     is_insert = False
-    files_dict = read_file_list(list_file, disc_dict, reverse=is_insert,
-                                file_category=file_category)
+    files_dict = read_file_list(list_file, disc_dict, reverse=is_insert, file_category=file_category)
 
     # Call _extraction_handler() on each file entry for each disc for each
     # category (i.e. [PATCH]).
@@ -1810,8 +1807,7 @@ def insert_all_from_list(list_file, disc_dict, file_category='[ALL]',
     # categories of the file list txt file. Each category can also be
     # specified individually.
     is_insert = True
-    files_list = read_file_list(list_file, disc_dict, reverse=is_insert,
-                                file_category=file_category)
+    files_list = read_file_list(list_file, disc_dict, reverse=is_insert, file_category=file_category)
 
     # Call _insertion_handler() on each file entry for each disc for each
     # category (i.e. [PATCH]).
@@ -1845,9 +1841,9 @@ def unpack_all(source_file, sector_padded=False, delete_empty_files=False):
     ----------
     source_file : str
         Name of file to be unpacked.
-    sector_padded : bool
+    sector_padded : boolean
         Whether the file being unpacked is sector aligned (default: False).
-    delete_empty_files : bool
+    delete_empty_files : boolean
         Whether to delete files less than 8 bytes long (default: False).
     """
 
@@ -1973,8 +1969,6 @@ def swap_all_from_list(list_file, disc_dict_pair, del_src_dir=False):
     # destination game versions.
     src_files_list = read_file_list(list_file, disc_dict_pair[0], file_category='[SWAP]')['[SWAP]']
     dst_files_list = read_file_list(list_file, disc_dict_pair[1], file_category='[SWAP]')['[SWAP]']
-    print(src_files_list)
-    print(dst_files_list)
     files_to_swap = []
     total_files = 0
 

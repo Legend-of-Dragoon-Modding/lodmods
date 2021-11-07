@@ -985,8 +985,7 @@ def dump_all(list_file, disc_dict):
 
     # For each disc in the file list, create an entry in script_dict with
     # the name of the corresponding CSV to dump text for that disc to.
-    files_list = read_file_list(list_file, disc_dict,
-                                file_category='[PATCH]')['[PATCH]']
+    files_list = read_file_list(list_file, disc_dict, file_category='[PATCH]')['[PATCH]']
     if len(files_list) == 0:
         print('\nDump: No files found in file list.')
         sys.exit(7)
@@ -1404,8 +1403,7 @@ def insert_all(list_file, disc_dict, version='USA'):
     print('\nInsert: Inserting script files')
     # For each disc in the file list, create an entry in script_dict with
     # the name of the corresponding CSV to insert text for that disc from.
-    files_list = read_file_list(list_file, disc_dict,
-                                file_category='[PATCH]')['[PATCH]']
+    files_list = read_file_list(list_file, disc_dict, file_category='[PATCH]')['[PATCH]']
     if len(files_list) == 0:
         print('\nDump: No files found in file list.')
         sys.exit(7)

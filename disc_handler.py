@@ -46,7 +46,7 @@ def _def_path(file_system_object):
                             file_system_object)
 
 
-def backup_file(input_file, restore_from_backup=False, print_message=False):
+def backup_file(input_file, restore_from_backup=False):
     """
     Creates/restores disc image backup.
 
@@ -72,12 +72,10 @@ def backup_file(input_file, restore_from_backup=False, print_message=False):
     input_backup = ''.join((input_file, '.orig'))
 
     if not os.path.exists(input_backup):
-        if print_message:
-            print(f'Backing up {input_file}')
+        print(f'Backing up {input_file}')
         shutil.copy(input_file, input_backup)
     elif restore_from_backup:
-        if print_message:
-            print(f'Restoring {input_file} from backup')
+        print(f'Restoring {input_file} from backup')
         shutil.copy(input_backup, input_file)
 
 
@@ -140,12 +138,12 @@ def cdpatch(disc_dict, mode='-x'):
         try:
             if disc_val[1][1] and mode == '-x':
                 subprocess.run([cdpatch_path, mode, disc_val[0],
-                                '-f', '-v', '-o', '-d', disc_val[1][0],
-                                *disc_val[1][1]])
+                                '-f', '-o', '-d', disc_val[1][0],
+                                *disc_val[1][1]], stdout=subprocess.DEVNULL)
             elif disc_val[1][1] and mode == '-i':
                 subprocess.run([cdpatch_path, mode, disc_val[0],
                                 '-f', '-d', disc_val[1][0],
-                                *disc_val[1][1]])
+                                *disc_val[1][1]], stdout=subprocess.DEVNULL)
         except FileNotFoundError:
             print('CDPatch: %s could not be found' % sys.exc_info()[1].filename)
 
@@ -221,10 +219,12 @@ def psxmode(disc_dict, backup_discs=False):
                 # adding EDC/ECC data.
                 if 'XA' in file.upper() or 'IKI' in file.upper():
                     subprocess.run([psxmode_path, disc_val[0], file,
-                                    files_to_insert[j], '-n'])
+                                    files_to_insert[j], '-n'],
+                                   stdout=subprocess.DEVNULL)
                 else:
                     subprocess.run([psxmode_path, disc_val[0], file,
-                                    files_to_insert[j]])
+                                    files_to_insert[j]],
+                                   stdout=subprocess.DEVNULL)
 
         except FileNotFoundError:
             print('PSXMode: %s could not be found' % disc_val)

@@ -4,7 +4,6 @@ of file dialogue is found in, plus scene number. If dialogue
 found in multiple files, replaces scene number with ???? for
 subsequent instances. If dialogue sample not found, writes
 'File not found' in place of filename.
-
 Copyright (C) 2019 theflyingzamboni
 """
 
@@ -79,10 +78,9 @@ def build_index(dir_to_index, output_file=None):
             else:
                 patch_target = '0'
 
-            parent_file = file_parts[i - 1].lower().replace('_dir', '.bin')
-            curr_file = x.lower().replace('_dir', '.bin')
-            parent_file = ''.join(
-                ('@', os.path.join(*file_parts[sect_index:i - 1], parent_file)))
+            parent_file = file_parts[i - 1].upper().replace('_DIR', '.BIN')
+            curr_file = x.upper().replace('_DIR', '.BIN')
+            parent_file = os.path.join(*file_parts[sect_index:i - 1], parent_file)
             parent_file = parent_file.replace('\\', '/')
             file_num = str(os.path.splitext(curr_file)[0].split('_')[-1])
             file_num = file_num.replace('{', '').replace('}', '')
@@ -103,9 +101,9 @@ def build_index(dir_to_index, output_file=None):
                 else:
                     is_main = '0'
 
-                output_dict[disc][parent_file] = [is_main, {(file_num, patch_target)}]
+                output_dict[disc][parent_file] = {is_main, (file_num, patch_target)}
             else:
-                output_dict[disc][parent_file][1].add((file_num, patch_target))
+                output_dict[disc][parent_file].add((file_num, patch_target))
 
         files_searched += 1
         if files_searched % update_percent == 0:
@@ -122,8 +120,16 @@ def build_index(dir_to_index, output_file=None):
     # Sort file numbers within each parent file.
     for disc, disc_val in output_dict.items():
         for key in disc_val.keys():
-            output_dict[disc][key][1] = sorted(
-                list(disc_val[key][1]), key=lambda tup: numerical_sort(tup[0]))
+            try:
+                output_dict[disc][key].remove('0')
+                is_main = '0'
+            except KeyError:
+                output_dict[disc][key].remove('1')
+                is_main = '1'
+            output_dict[disc][key] = sorted(
+                list(disc_val[key]),
+                key=lambda tup: numerical_sort(tup[0]))
+            output_dict[disc][key].insert(0, is_main)
 
     # Generate output using output_dict.
     if output_file is not None:
@@ -144,7 +150,6 @@ def id_file_type(dir_to_search, file_type=None, header_pattern=None,
                  output_file=None):
     """
     Identifies files of given type by header or byte pattern.
-
     File types can be defined by either file type or byte pattern. Only
     one is required, and file type is given higher priority.
     If the desired file type is not already predefined, a raw byte pattern
@@ -153,7 +158,6 @@ def id_file_type(dir_to_search, file_type=None, header_pattern=None,
     unpacked using the unpack_all() function in game_file_handler only, due
     to the removal of non-bottom-level files. Not doing so could result in
     inappropriately set is_patch_target flags on some files.
-
     dir_to_search : str
         Name of root directory to search
     file_type : str
@@ -258,8 +262,7 @@ def id_file_type(dir_to_search, file_type=None, header_pattern=None,
 
                 parent_file = file_parts[i - 1].upper().replace('_DIR', '.BIN')
                 curr_file = x.upper().replace('_DIR', '.BIN')
-                parent_file = ''.join(
-                    ('@', os.path.join(*file_parts[sect_index:i - 1], parent_file)))
+                parent_file = os.path.join(*file_parts[sect_index:i - 1], parent_file)
                 parent_file = parent_file.replace('\\', '/')
                 file_num = str(os.path.splitext(curr_file)[0].split('_')[-1])
                 file_num = file_num.replace('{', '').replace('}', '')
@@ -280,9 +283,9 @@ def id_file_type(dir_to_search, file_type=None, header_pattern=None,
                     else:
                         is_main = '0'
 
-                    output_dict[disc][parent_file] = [is_main, {(file_num, patch_target)}]
+                    output_dict[disc][parent_file] = {is_main, (file_num, patch_target)}
                 else:
-                    output_dict[disc][parent_file][1].add((file_num, patch_target))
+                    output_dict[disc][parent_file].add((file_num, patch_target))
 
         files_searched += 1
         if files_searched % update_percent == 0:
@@ -299,8 +302,16 @@ def id_file_type(dir_to_search, file_type=None, header_pattern=None,
     # Sort file numbers within each parent file.
     for disc, disc_val in output_dict.items():
         for key in disc_val.keys():
-            output_dict[disc][key][1] = sorted(
-                list(disc_val[key][1]), key=lambda tup: numerical_sort(tup[0]))
+            try:
+                output_dict[disc][key].remove('0')
+                is_main = '0'
+            except KeyError:
+                output_dict[disc][key].remove('1')
+                is_main = '1'
+            output_dict[disc][key] = sorted(
+                list(disc_val[key]),
+                key=lambda tup: numerical_sort(tup[0]))
+            output_dict[disc][key].insert(0, is_main)
 
     # Generate output using output_dict.
     if output_file:

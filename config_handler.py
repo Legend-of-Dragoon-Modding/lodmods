@@ -85,8 +85,7 @@ def _merge_dicts(dict1, dict2):
                     # If the items stored at key are lists and the first item is,
                     # an int, add files from dict2 to dict1
                     dict1[key][0] = dict1[key][0] | dict2[key][0]
-                    dict1[key][1] = dict1[key][1] | dict2[key][1]
-                    dict1[key].extend(dict2[key][2:])
+                    dict1[key].extend(dict2[key][1:])
         else:  # If key is not in dict1, add it
             dict1[key] = dict2[key]
     return dict1
@@ -450,7 +449,8 @@ def config_setup(config_file, config_dict, version_list, called_by_patcher=False
     """
 
     # Set up each version one at a time.
-    for version in version_list:
+    version_required = True
+    for i, version in enumerate(version_list):
         # Add version to [Game  Directories] in config_dict
         # if it's not already there.
         if version not in config_dict['[Game Directories]']:
@@ -472,7 +472,9 @@ def config_setup(config_file, config_dict, version_list, called_by_patcher=False
                 or (config_dict['[Game Directories]'][version] == ''
                     or not all(val[0] for key, val in
                                list(config_dict['[Game Discs]'][version].items())[1:])):
-            version_dir, version_disc_list = get_disc_dir(version)
+            if i > 0:
+                version_required = False
+            version_dir, version_disc_list = get_disc_dir(version, version_required)
             config_dict['[Game Directories]'][version] = version_dir
             for x in zip(list(config_dict['[Game Discs]'][version].keys())[1:],
                          version_disc_list):
@@ -481,8 +483,8 @@ def config_setup(config_file, config_dict, version_list, called_by_patcher=False
     update_config(config_file, config_dict)
 
 
-def read_file_list(list_file, disc_dict, reverse=False, file_category='[ALL]',
-                   check_duplicates=False):
+def read_file_list(list_file, disc_dict, reverse=False, merge_categories=False,
+                   file_category='[ALL]', check_duplicates=False):
     """
     Read file list txt file to a dict.
 
@@ -501,15 +503,19 @@ def read_file_list(list_file, disc_dict, reverse=False, file_category='[ALL]',
     Several additional flags/parameters can be set depending on the context
     from which read_file_list() is used.
 
+    Parameters
+    ----------
     list_file : str
         Name of file list text file to read.
     disc_dict : dict
         Dict of game disc info.
     reverse : boolean
         Flag to reverse sort order of subfiles (necessary when inserting
-        files). (default: False)
+        files). (default: False).
+    merge_categories : boolean
+        Flag to merge [PATCH] and [SWAP] into [ALL]. (default: False)
     file_category : str
-        Category from list file to add to file_list_dict (default: [ALL]).
+        Category from list file to add to file_list_dict. (default: [ALL])
     check_duplicates : boolean
         Flag to check for duplicate file entries in list file.
         (default: False)
@@ -556,7 +562,7 @@ def read_file_list(list_file, disc_dict, reverse=False, file_category='[ALL]',
 
     # If the file category is specified as [PATCH] or [SWAP], restrict
     # file_list_dict to that category.
-    if file_category in ['[PATCH]', ['SWAP']]:
+    if file_category in ['[PATCH]', '[SWAP]']:
         file_list_dict = {file_category: file_list_dict[file_category]}
 
     # Check for duplicate files in the file_list_dict and print a warning
@@ -580,7 +586,7 @@ def read_file_list(list_file, disc_dict, reverse=False, file_category='[ALL]',
                 sys.exit(4)
 
     # If specified, merge all file categories into a single [ALL] category.
-    if file_category == '[ALL]':
+    if merge_categories:
         file_list_dict = {'[ALL]': reduce(
             _merge_dicts, [val for key, val in file_list_dict.items()])}
 
@@ -604,7 +610,7 @@ def read_file_list(list_file, disc_dict, reverse=False, file_category='[ALL]',
     return file_list_dict
 
 
-def write_file_list(output_file, file_list_dict, file_path=None):
+def write_file_list(output_file, file_list_dict):
     """
     Writes file list text file.
 
@@ -617,19 +623,15 @@ def write_file_list(output_file, file_list_dict, file_path=None):
         Dict of games files to write to text file
     """
 
-    if file_path is not None:
-        file_path = ''.join((file_path, os.sep))
-
     with open(output_file, 'w') as f:
         for cat, cat_val in file_list_dict.items():
             f.write(''.join((cat, '\n')))
             for disc, disc_val in cat_val.items():
                 f.write(''.join(('#', disc, '\n')))
                 for entry, entry_val in disc_val.items():
-                    if file_path is not None:
-                        entry = ''.join(('@', entry.replace(file_path, '')))
+                    entry = ''.join(('@', entry))
                     f.write(''.join((entry, '\t', str(entry_val[0]), '\n')))
-                    for item in entry_val[1]:
+                    for item in entry_val[1:]:
                         item = [str(x) for x in item]
                         f.write('\t'.join(item))
                         f.write('\n')
@@ -688,6 +690,12 @@ def update_file_list(list_file, config_dict, disc_dict):
                 new_dict[new_key] = val
             else:
                 mods_file_dict[cat][disc] = new_dict
+
+    for cat in ['[PATCH]', '[SWAP]']:  # Make sure both categories present.
+        try:
+            mods_file_dict[cat]
+        except KeyError:
+            mods_file_dict[cat] = {}
 
     # Write the new file list dict to the specified list file with
     # proper formatting.
