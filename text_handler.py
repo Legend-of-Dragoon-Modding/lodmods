@@ -83,14 +83,22 @@ OV_TEXT_STARTS = {'SCUS': {'BTTL.OV_': [0x34b18],
                             'SCES_130.47': [],
                             'SCES_230.47': [],
                             'SCES_330.47': []},
-                  'SCPS': {'BTTL.OV_': [],
+                  'SCPS1': {'BTTL.OV_': [],
                            'S_BTLD.OV_': [],
                            'S_ITEM.OV_': [],
                            'WMAP.OV_': [],
                            'SCPS_101.19': [],
                            'SCPS_101.20': [],
                            'SCPS_101.21': [],
-                           'SCPS_101.22': []}}
+                           'SCPS_101.22': []},
+                  'SCPS4': {'BTTL.OV_': [],
+                            'S_BTLD.OV_': [],
+                            'S_ITEM.OV_': [],
+                            'WMAP.OV_': [],
+                            'SCPS_101.19': [],
+                            'SCPS_101.20': [],
+                            'SCPS_101.21': [],
+                            'SCPS_101.22': []}}
 OV_TEXT_ENDS = {'SCUS': {'BTTL.OV_': [0x34ce4],
                          'S_BTLD.OV_': [0x168f0],
                          'S_ITEM.OV_': [0x1c298, 0x1dfb4, 0x1e8ec, 0x1ffe4,
@@ -140,7 +148,15 @@ OV_TEXT_ENDS = {'SCUS': {'BTTL.OV_': [0x34ce4],
                           'SCES_130.47': [],
                           'SCES_230.47': [],
                           'SCES_330.47': []},
-                'SCPS': {'BTTL.OV_': [],
+                'SCPS1': {'BTTL.OV_': [],
+                         'S_BTLD.OV_': [],
+                         'S_ITEM.OV_': [],
+                         'WMAP.OV_': [],
+                         'SCPS_101.19': [],
+                         'SCPS_101.20': [],
+                         'SCPS_101.21': [],
+                         'SCPS_101.22': []},
+                'SCPS4': {'BTTL.OV_': [],
                          'S_BTLD.OV_': [],
                          'S_ITEM.OV_': [],
                          'WMAP.OV_': [],
@@ -861,12 +877,12 @@ def dump_text(file, csv_file, ptr_tbl_starts, ptr_tbl_ends,
         List of starting offsets of pointer tables in file.
     ptr_tbl_ends : int list
         List of ending offsets of pointer tables in file.
-    single_ptr_tbl : boolean list
+    single_ptr_tbl : bool list
         Indicates whether pointer tables are dual (text and box tables)
         (default: (False, )).
     ov_text_starts : int list
         List of starting offsets of text blocks in OV_ files (default: None).
-    called : boolean
+    called : bool
         Indicates whether function was called from _dump_helper()
         (default: False).
     """
@@ -1115,14 +1131,14 @@ def insert_text(file, csv_file, ptr_tbl_starts, ptr_tbl_ends,
         List of starting offsets of pointer tables in file.
     ptr_tbl_ends : int list
         List of ending offsets of pointer tables in file.
-    single_ptr_tbl : boolean list
+    single_ptr_tbl : bool list
         Indicates whether pointer tables are dual (text and box tables)
         (default: (False, )).
     ov_text_starts : int list
         List of starting offsets of text blocks in OV_ files (default: None).
     version : str
         Game version being modded. Needed for OV text block offsets.
-    called : boolean
+    called : bool
         Indicates whether function was called from _dump_helper()
         (default: False).
     """

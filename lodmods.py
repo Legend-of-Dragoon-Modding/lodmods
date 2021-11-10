@@ -5,15 +5,23 @@ Copyright (C) 2019 theflyingzamboni
 """
 
 import argparse
+from copy import deepcopy
+import glob
 import multiprocessing
 import os
+import re
+import shutil
 import sys
-from config_handler import read_config, config_setup  # update_file_list
+import traceback
+from config_handler import read_config, config_setup, read_file_list, \
+    update_file_list  # , _merge_dicts
 from disc_handler import backup_file, cdpatch, psxmode
 from game_file_handler import extract_files, extract_all_from_list, insert_files,\
     insert_all_from_list, file_swap, swap_all_from_list, run_decompression,\
     run_compression, unpack_all
+from hidden_print import HiddenPrints
 from id_files import id_file_type, build_index
+from mod_handler import update_mod_list, create_patches, install_mods
 from text_handler import dump_text, dump_all, insert_text, insert_all
 
 
@@ -161,6 +169,9 @@ def parse_arguments():
     # Optional argument
     parser_cd.add_argument('-i', '--insert', action='store_true', dest='mode',
                            help='Set cdpatch to insert mode')
+    """parser_cd.add_argument('-b', '--backup', action='store_true', dest='backup',
+                           help='''Restore image from backup before inserting
+                           files (default: False)''')"""  # does not work as expected
     parser_cd.set_defaults(cdpatch=cdpatch)
 
     # Create subparser for psxmode command.
@@ -178,9 +189,9 @@ def parse_arguments():
                            help='''Discs to insert files into (use integers or 'all')''')
 
     # Optional argument
-    parser_ps.add_argument('-r', '--restore', action='store_true', dest='restore',
-                           help='''Restore image from backup  before inserting
-                           files (default: False)''')
+    """parser_ps.add_argument('-', '--backup', action='store_true', dest='backup',
+                           help='''Restore image from backup before inserting
+                           files (default: False)''')"""  # does not work as expected
     parser_ps.set_defaults(psxmode=psxmode)
 
     # Create subparser for decompress command.
@@ -582,29 +593,49 @@ def parse_arguments():
                            (default: @Scripts under [Modding Directories])''')
     parser_ia.set_defaults(insert_all=insert_all)
 
-    """# create subparser for createpatch command
+    # create subparser for createpatch command
     parser_cp = subparsers.add_parser('createpatch',
-                                      usage='',
-                                      description='''''')
+                                      usage='%(prog)s game_version',
+                                      description='''Uses xdelta to create diff
+                                      patches for files by comparing modified
+                                      file to clean .orig backup. Does this for
+                                      all files marked as mod targets in a file
+                                      list text file.''',
+                                      help='''Creates xdelta patches for all 
+                                      files listed in input text file.''')
 
     # positional arguments
     parser_cp.add_argument('version',  help='Game version to create patches for')
     parser_cp.set_defaults(create_patches=create_patches)
 
     # create subparser for patch command
-    parser_p = subparsers.add_parser('patch', usage='',
-                                     description='''''')
+    parser_im = subparsers.add_parser('installmods',
+                                      usage='%(prog)s game_version '
+                                      '[-s swap_src_version] [-d',
+                                      description='''Extracts all files specified
+                                      in file list text file, applies mods to all
+                                      files designated as mod targets, and then 
+                                      inserts them back into the discs.  This 
+                                      includes applying xdelta diff patches to 
+                                      game files for [PATCH] files and swapping
+                                      files in [SWAP] with the corresponding files
+                                      in a second game version. A second version
+                                      must be set up in the config for file 
+                                      swapping to work.''',
+                                      help='''Installs xdelta patches or file 
+                                      swap mods for all files listed in input
+                                      text file.''')
 
     # positional arguments
-    parser_p.add_argument('version', help='Game version to patch')
+    parser_im.add_argument('version', help='Game version to patch')
 
     # optional argument
-    parser_p.add_argument('-s', '--swap', metavar='',
-                          help='Game version to swap files from')
-    parser_p.add_argument('-d', '--delete', action='store_true', dest='delete',
-                          help='''Specify whether to delete game files folder
-                          after patching (default: False)''')
-    parser_p.set_defaults(patch=patch)"""
+    parser_im.add_argument('-s', '--swap', dest='swap_src', default=None,
+                           metavar='', help='Game version to swap files from')
+    parser_im.add_argument('-d', '--delete', action='store_true', dest='delete',
+                           help='''Specify whether to delete game files folder
+                           after patching (default: False)''')
+    parser_im.set_defaults(install_mods=install_mods)
 
     # display help if no arguments passed to lodmods.py
     if len(sys.argv) == 1:
@@ -637,16 +668,48 @@ if __name__ == '__main__':
             for disc, disc_val in disc_dict.items():
                 args.file_backup(disc_val[0], args.restore_from_backup, True)
         elif args.func == 'cdpatch':
-            # TODO: Need to consider the case of all discs, and what this tool should be used for
             if args.disc[0] == '*':
-                args.disc = ['All Discs', 'Disc 1', 'Disc 2', 'Disc 3', 'Disc 4']
+                disc_list_indiv = ['Disc 1', 'Disc 2', 'Disc 3', 'Disc 4']
+                disc_list_all = ['All Discs']
             else:
-                args.disc = ['All Discs' if x.lower() == 'all'
-                             else ' '.join(('Disc', x)) for x in args.disc]
-            disc_dict = _build_disc_dict(config_dict, args.version, args.disc,
-                                         scripts_dir, game_files_dir)
+                args.disc = [x.lower() for x in args.disc]
+                try:
+                    args.disc.pop(args.disc.index('all'))
+                    disc_list_all = ['All Discs']
+                except ValueError:
+                    disc_list_all = []
+                disc_list_indiv = [' '.join(('Disc', x)) for x in args.disc]
+
+            disc_dict_indiv = _build_disc_dict(config_dict, args.version, disc_list_indiv,
+                                               scripts_dir, game_files_dir)
+            disc_dict_all = _build_disc_dict(config_dict, args.version, disc_list_all,
+                                             scripts_dir, game_files_dir)
+
+            # Does not work as expected
+            """backup_dict = _merge_dicts(
+                deepcopy(disc_dict_indiv), deepcopy(disc_dict_all))
+            for disc, disc_val in backup_dict.items():
+                try:
+                    if not os.path.exists('.'.join((disc_val[0], 'orig'))):
+                        print(f'\nPSXMode: Creating {disc} backup\n')
+                        backup_file(disc_val[0], args.backup, True)
+                    elif args.backup:
+                        print(f'\nPSXMode: Restoring {disc} backup\n')
+                        backup_file(disc_val[0], args.backup, True)
+                except FileNotFoundError:
+                    print(f'CDPatch: {disc_val} could not be found')"""
+
             args.mode = '-i' if args.mode else '-x'
-            args.cdpatch(disc_dict, args.mode)
+            if disc_dict_all:
+                for disc in ('Disc 1', 'Disc 2', 'Disc 3', 'Disc 4'):
+                    disc_path = os.path.join(config_dict['[Game Directories]'][args.version],
+                                             config_dict['[Game Discs]'][args.version][disc][0])
+                    disc_dict_all[disc] = [
+                        disc_path, [os.path.join(game_files_dir, args.version, 'All Discs'), {}], '']
+                args.cdpatch(disc_dict_all, args.mode)
+
+            if disc_dict_indiv:
+                args.cdpatch(disc_dict_indiv, args.mode)
         elif args.func == 'psxmode':
             if args.disc[0] == '*':
                 args.disc = ['All Discs', 'Disc 1', 'Disc 2', 'Disc 3', 'Disc 4']
@@ -662,7 +725,7 @@ if __name__ == '__main__':
                                                  config_dict['[Game Discs]'][args.version][disc][0])
                         disc_dict[disc] = [disc_path,
                                            ['', {}], '']
-            args.psxmode(disc_dict, args.restore)
+            args.psxmode(disc_dict)  # , args.backup)
         elif args.func == 'decompress':
             args.run_decompression(args.compressed_file, args.start_block,
                                    args.end_block, args.is_subfile)
@@ -755,8 +818,78 @@ if __name__ == '__main__':
             if args.script_folder is None:
                 args.script_folder = scripts_dir
             disc_list = list(config_dict['[Game Discs]'][args.version].keys())
-            disc_dict = _build_disc_dict(config_dict, args.version, disc_list, args.script_folder, 
-                                         game_files_dir)
+            disc_dict = _build_disc_dict(config_dict, args.version, disc_list,
+                                         args.script_folder, game_files_dir)
             args.insert_all(file, disc_dict, args.version)
+        elif args.func == 'createpatch':
+            file = config_dict['[File Lists]'][args.version]
+            disc_list = list(config_dict['[Game Discs]'][args.version].keys())
+            disc_dict = _build_disc_dict(config_dict, args.version, disc_list,
+                                         scripts_dir, game_files_dir)
+            args.create_patches(file, game_files_dir, patch_dir, disc_dict)
+        elif args.func == 'installmods':
+            list_file = config_dict['[File Lists]'][args.version]
+            swap = (args.version, args.swap_src)
+
+            try:
+                update_mod_list(args.config_file, config_dict, swap)
+
+                disc_dict_pair = []
+                for version in [s for s in swap if s is not None]:
+                    disc_dict = {}
+                    for disc in config_dict['[Game Discs]'][version].keys():
+                        if (disc != 'All Discs' and config_dict['[Game Discs]'][version][disc][0] != '') \
+                                or (disc == 'All Discs' and
+                                    config_dict['[Game Discs]'][version]['Disc 4'][0] != ''):
+                            img = config_dict['[Game Discs]'][version][disc][0] \
+                                if disc != 'All Discs' \
+                                else config_dict['[Game Discs]'][version]['Disc 4'][0]
+
+                            disc_dir = os.path.join(version, disc)
+                            disc_dict[disc] = [
+                                os.path.join(config_dict['[Game Directories]'][version], img),
+                                [os.path.join(game_files_dir, disc_dir),
+                                 config_dict['[Game Discs]'][version][disc][1]]]
+                    disc_dict_pair.append(disc_dict)
+
+                update_file_list(list_file, config_dict, disc_dict_pair[0])
+
+                for mod, mod_val in config_dict['[Mod List]'].items():
+                    if not mod_val:
+                        continue
+                    for file in glob.glob(os.path.join(mod, 'patches', '**', '*.xdelta'), recursive=True):
+                        patch_list.append(file)
+
+                print()
+                if len(disc_dict_pair) == 2:
+                    swap_check = read_file_list(
+                        list_file, disc_dict_pair[1], file_category='[SWAP]')
+                    if swap_check['[SWAP]'] and not \
+                            (all([val[0] for key, val in config_dict['[Game Discs]']['JPN'].items()])
+                             or config_dict['[Game Directories]']['JPN']):
+                        print('Japanese game disc folder and file names must be specified when '
+                              'using a mod that swaps files.')
+                        sys.exit(0)
+
+                install_mods(list_file, disc_dict_pair, deepcopy(patch_list))
+
+                try:
+                    shutil.rmtree(game_files_dir)
+                except PermissionError:
+                    print(f'LODModS: Could not delete {game_files_dir}')
+
+            except FileNotFoundError:
+                print(traceback.format_exc())
+                print(f'LODModS: {sys.exc_info()[1].filename} not found')
+            except SystemExit:
+                pass
+            finally:  # Need to restore compression metadata bytes to BPE patch files.
+                with HiddenPrints():
+                    block_range_pattern = re.compile(r'(\.{\d+-\d+})')
+                    for p in patch_list:
+                        backup = '.'.join((p, 'orig'))
+                        if block_range_pattern.search(p) and os.path.exists(backup):
+                            backup_file(p, True)
+                            os.remove(backup)
     except KeyboardInterrupt:
         print('\n')

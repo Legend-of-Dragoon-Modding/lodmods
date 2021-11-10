@@ -13,7 +13,7 @@ Copyright (C) 2019 theflyingzamboni
 """
 
 from collections import OrderedDict
-import copy
+from copy import deepcopy
 from functools import reduce
 import glob
 import os
@@ -139,7 +139,7 @@ def _check_for_duplicates(file_list_dict):
     # enter the 'else' statement.
     dup_file_dict = {}
     for key, val in merge_dict.items():
-        i = sorted([x[0] for x in val[2:]], key=numerical_sort, reverse=True)  # List of file #s
+        i = sorted([x[0] for x in val[1:]], key=numerical_sort, reverse=True)  # List of file #s
         k = set(i)  # Set of file #s
         if len(i) != len(k) or \
                 (('*' in k or '^' in k or any('-' in s for s in k))
@@ -147,31 +147,30 @@ def _check_for_duplicates(file_list_dict):
             if '^' in k:
                 if key not in dup_file_dict:
                     dup_file_dict[key] = k
-            elif '*' in k and val[1]:
+            elif '*' in k:
                 if key not in dup_file_dict:
                     dup_file_dict[key] = k
             else:
-                if val[1]:  # If file is flagged as a mod target
-                    dup_test_list = []
+                dup_test_list = []
 
-                    # Iterate through list of file #s, popping each item. If the item
-                    # is a range, expand it. For each popped number, check if it exists
-                    # in the dup_test_list. If it does, add it to the dup_file_dict for
-                    # the appropriate parent file. At the end, append each popped item
-                    # to dup_test_list.
-                    for item_list in range(len(i[:])):
-                        item = i.pop()
-                        if '-' in item:
-                            range_list = [str(x) for x in range(int(item.split('-')[0]),
-                                                                int(item.split('-')[1]))]
-                        else:
-                            range_list = [item]
-                        if any(num in dup_test_list for num in range_list):
-                            if key not in dup_file_dict:
-                                dup_file_dict[key] = list()
-                            dup_file_dict[key].append(item)
+                # Iterate through list of file #s, popping each item. If the item
+                # is a range, expand it. For each popped number, check if it exists
+                # in the dup_test_list. If it does, add it to the dup_file_dict for
+                # the appropriate parent file. At the end, append each popped item
+                # to dup_test_list.
+                for item_list in range(len(i[:])):
+                    item = i.pop()
+                    if '-' in item:
+                        range_list = [str(x) for x in range(int(item.split('-')[0]),
+                                                            int(item.split('-')[1]))]
+                    else:
+                        range_list = [item]
+                    if any(num in dup_test_list for num in range_list):
+                        if key not in dup_file_dict:
+                            dup_file_dict[key] = list()
+                        dup_file_dict[key].append(item)
 
-                        dup_test_list.extend(range_list)
+                    dup_test_list.extend(range_list)
 
     # Add all of the entries in dup_file_dict to the error string with
     # the proper formatting.
@@ -338,7 +337,7 @@ def get_disc_dir(version, required=True):
     ----------
     version : str
         Game version to get directory and images for (e.g. USA)
-    required : boolean
+    required : bool
         Whether the information for a particular version is required.
 
     Returns
@@ -444,17 +443,20 @@ def config_setup(config_file, config_dict, version_list, called_by_patcher=False
         Dict of config_file to be set up.
     version_list : str list
         List of game versions to set up version info for.
-    called_by_patcher : boolean
+    called_by_patcher : bool
         Whether config_setup is called by the patcher or independently.
     """
 
     # Set up each version one at a time.
     version_required = True
+    new_version_list = []
     for i, version in enumerate(version_list):
-        # Add version to [Game  Directories] in config_dict
+        # Add version to [Game Directories] in config_dict
         # if it's not already there.
         if version not in config_dict['[Game Directories]']:
             config_dict['[Game Directories]'][version] = ''
+        elif config_dict['[Game Directories]'][version] != '':
+            new_version_list.append(version)
 
         # Add entries to [Game Discs] for version if they do not already
         # exist.
@@ -479,8 +481,11 @@ def config_setup(config_file, config_dict, version_list, called_by_patcher=False
             for x in zip(list(config_dict['[Game Discs]'][version].keys())[1:],
                          version_disc_list):
                 config_dict['[Game Discs]'][version][x[0]][0] = x[1]
+            new_version_list.append(version) if version_dir else new_version_list.append(None)
 
     update_config(config_file, config_dict)
+
+    return new_version_list if called_by_patcher else None
 
 
 def read_file_list(list_file, disc_dict, reverse=False, merge_categories=False,
@@ -509,14 +514,14 @@ def read_file_list(list_file, disc_dict, reverse=False, merge_categories=False,
         Name of file list text file to read.
     disc_dict : dict
         Dict of game disc info.
-    reverse : boolean
+    reverse : bool
         Flag to reverse sort order of subfiles (necessary when inserting
         files). (default: False).
-    merge_categories : boolean
+    merge_categories : bool
         Flag to merge [PATCH] and [SWAP] into [ALL]. (default: False)
     file_category : str
         Category from list file to add to file_list_dict. (default: [ALL])
-    check_duplicates : boolean
+    check_duplicates : bool
         Flag to check for duplicate file entries in list file.
         (default: False)
 
@@ -568,18 +573,18 @@ def read_file_list(list_file, disc_dict, reverse=False, merge_categories=False,
     # Check for duplicate files in the file_list_dict and print a warning
     # if any exist.
     if check_duplicates:
-        err_str = _check_for_duplicates(copy.deepcopy(file_list_dict))
+        err_str = _check_for_duplicates(deepcopy(file_list_dict))
         try:
             if err_str:
                 raise DuplicationError
         except DuplicationError:
-            print("File Handler: The following files are duplicated"
-                  " or overlap in the file list.\n"
-                  "This may potentially cause any affected patches "
-                  "not to work properly.\n"
-                  "Check mod readmes for compatibility "
-                  "information.\n('*' = all files/blocks, "
-                  "'^' = current file')\n\n%s" % err_str)
+            print(f"File Handler: The following files are duplicated"
+                  f" or overlap in the file list.\n"
+                  f"This may potentially cause any affected patches "
+                  f"not to work properly.\n"
+                  f"Check mod readmes for compatibility "
+                  f"information.\n('*' = all files/blocks, "
+                  f"'^' = current file')\n\n{err_str}")
             if '^' in err_str:
                 print("File Handler: Cannot swap or patch both a file and"
                       "its subfiles.")
@@ -666,19 +671,41 @@ def update_file_list(list_file, config_dict, disc_dict):
             mods_file_list.append(read_file_list(list_name, disc_dict))
     mods_file_dict = reduce(_merge_dicts, mods_file_list)
 
-    # Loop through all the files in the file dict, and if any of the subfile
-    # lists contain a '*', make that the only entry in the subfile list
-    # (avoids unnecessary subfile listings).
+    # Check for duplicate files in the file_list_dict and print a warning
+    # if any exist.
+    err_str = _check_for_duplicates(deepcopy(mods_file_dict))
+    try:
+        if err_str:
+            raise DuplicationError
+    except DuplicationError:
+        print(f"File Handler: The following files are duplicated"
+              f" or overlap in the file list.\n"
+              f"This may potentially cause any affected patches "
+              f"not to work properly.\n"
+              f"Check mod readmes for compatibility "
+              f"information.\n('*' = all files/blocks, "
+              f"'^' = current file')\n\n{err_str}")
+        if '^' in err_str:
+            print("File Handler: Cannot swap or patch both a file and"
+                  "its subfiles.")
+            sys.exit(4)
+
+    # Remove duplicate subfile numbers from files in file_list_dict.
     for cat, cat_val in mods_file_dict.items():
         for disc, disc_val in cat_val.items():
             for key, val in disc_val.items():
-                if not val[1] and any('*' in sl for sl in val[2:]):
-                    for sl in val[2:]:
-                        if sl[0] == '*':
-                            val = val[:2]
-                            val.append(sl)
-                            mods_file_dict[cat][disc][key] = val
-                            break
+                val_list = []
+                for sl in val[1:]:
+                    if sl[0] == '*':
+                        val_list = [sl]
+                        break
+                    elif not any(sl[0] in x for x in val_list):
+                        val_list.append(sl)
+                val = val[:1]
+                val.extend(sorted(val_list,
+                                  key=lambda x: numerical_sort(x[0]),
+                                  reverse=False))
+                mods_file_dict[cat][disc][key] = val
 
     # Remove the user's file path from the game file names, so the keys are
     # relative to the disc image (e.g. OVL/S_ITEM.OV_).

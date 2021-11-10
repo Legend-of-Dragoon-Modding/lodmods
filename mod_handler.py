@@ -4,7 +4,7 @@ This module contains functions to create and apply xdelta diff patches for
 files in a file list. Used for creating and applying mods."""
 
 import colorama
-import copy
+from copy import deepcopy
 import glob
 import mmap
 import multiprocessing
@@ -88,7 +88,7 @@ def update_mod_list(config_file, config_dict, version_list):
                     print('%s uses files from a secondary game version. '
                           'A source (swap) version must be specified when '
                           'installing a mod that requires it '
-                          '(e.g. patch USA -s JPN)\n' %
+                          '(e.g. installmods USA -s JPN)\n' %
                           os.path.basename(available_mods[num - 1]))
                     break
             else:
@@ -195,7 +195,7 @@ def create_patches(list_file, game_files_dir, patch_dir, disc_dict):
     print(ERASE + 'Patcher: Patch creation successful\n')
 
 
-def patch(list_file, disc_dict_pair, patch_list):
+def install_mods(list_file, disc_dict_pair, patch_list):
     """
     Applies mods to listed files.
 
@@ -210,19 +210,23 @@ def patch(list_file, disc_dict_pair, patch_list):
     list_file : str
         Name of file list text file.
     disc_dict_pair : dict tuple
-        Pair of disc dicts (one each for versions 1 and 2).
+        Pair of disc dicts (one each for dst and src).
     patch_list : str list
         List of file names of patches to apply.
     """
 
-    dest_dict = disc_dict_pair[1]
-    swap_src_dict = disc_dict_pair[0]
+    dest_dict = disc_dict_pair[0]
+    try:
+        swap_src_dict = disc_dict_pair[1]
+    except IndexError:
+        swap_src_dict = {}
 
     files_list = read_file_list(list_file, dest_dict, check_duplicates=True)
 
     for disc, disc_val in dest_dict.items():
         try:
             if disc != 'All Discs':
+                print(f'LODModS: Backing up {disc}', end='\r')
                 with HiddenPrints():
                     backup_file(disc_val[0], True)
         except FileNotFoundError:
@@ -231,14 +235,15 @@ def patch(list_file, disc_dict_pair, patch_list):
     print(ERASE + 'LODModS: Discs backed up')
 
     print('\nLODModS: Extracting files from discs')
-    cdpatch(copy.deepcopy(dest_dict))
-    cdpatch(copy.deepcopy(swap_src_dict))
+    cdpatch(deepcopy(dest_dict), '-x', True)
+    if swap_src_dict:
+        cdpatch(deepcopy(swap_src_dict), '-x', True)
     print('LODModS: Files extracted')
 
     print('\nLODModS: Extracting subfiles from files')
     with HiddenPrints():
         extract_all_from_list(list_file, dest_dict)
-        if files_list['[SWAP]']:
+        if swap_src_dict:
             extract_all_from_list(list_file, swap_src_dict, '[SWAP]')
     print('LODModS: Subfiles extracted')
 
@@ -319,14 +324,13 @@ def patch(list_file, disc_dict_pair, patch_list):
                     shutil.copy('.'.join((patch_file, 'orig')), patch_file)
                     os.remove('.'.join((patch_file, 'orig')))
 
-                print('LODModS: %d/%d files patched' %
-                      (patches_applied, total_files), end='\r')
+                print(f'LODModS: {patches_applied:d}/{total_files:d} files patched',
+                      end='\r')
 
         print(ERASE + 'LODModS: Patches applied')
 
     if swap_src_dict:
-        with HiddenPrints():
-            swap_all_from_list(list_file, disc_dict_pair)
+        swap_all_from_list(list_file, disc_dict_pair)
 
     print('\nLODModS: Inserting subfiles into files')
     with HiddenPrints():
@@ -334,7 +338,7 @@ def patch(list_file, disc_dict_pair, patch_list):
     print('LODModS: Subfiles inserted')
 
     print('\nLODModS: Inserting files into discs (may take several minutes)')
-    cdpatch_dict = copy.deepcopy(dest_dict)
+    cdpatch_dict = deepcopy(dest_dict)
     for disc, disc_val in cdpatch_dict.items():
         for key in list(disc_val[1][1].keys()):
             if 'XA' not in key and 'IKI' not in key:
@@ -342,8 +346,18 @@ def patch(list_file, disc_dict_pair, patch_list):
             else:
                 del dest_dict[disc][1][1][key]
 
-    cdpatch(cdpatch_dict, '-i')
-    psxmode(dest_dict)
+    if cdpatch_dict:
+        cdpatch_dict_all = {k: v for k, v in cdpatch_dict.items() if k == 'All Discs'}
+        if cdpatch_dict_all:
+            for disc in ('Disc 1', 'Disc 2', 'Disc 3', 'Disc 4'):
+                disc_path = cdpatch_dict_all['All Discs'][0]
+                cdpatch_dict_all[disc] = [
+                    disc_path, [cdpatch_dict_all['All Discs'][1][0], {}], '']
+        cdpatch_dict_indiv = {k: v for k, v in cdpatch_dict.items() if k != 'All Discs'}
+
+        cdpatch(cdpatch_dict_all, '-i', True)
+        cdpatch(cdpatch_dict_indiv, '-i', True)
+    psxmode(dest_dict, False, True)
     print(MOVE_CURSOR + ERASE + 'LODModS: Inserting files into discs\n'
                                 'LODModS: Files inserted\n')
 
@@ -354,7 +368,7 @@ def main():
     multiprocessing.freeze_support()
 
     print('\n---------------------------------------------\n'
-          'LODModS Patcher v 1.31 - (c) theflyingzamboni\n'
+          'LODModS Patcher v 2.00 - (c) theflyingzamboni\n'
           '---------------------------------------------\n')
     print('----------------------------\n'
           'Additional Credits:\n'
@@ -365,20 +379,20 @@ def main():
           '----------------------------\n')
 
     version = 'USA'  # Only version that can currently be modded
-    swap = ('JPN', 'USA')
+    swap = ('USA', 'JPN')
     patch_list = []
 
     try:
         config_dict = read_config('lodmods.config')
-        config_setup('lodmods.config', config_dict, [swap[1], swap[0]], True)
+        swap = config_setup('lodmods.config', config_dict, swap, True)
 
         list_file = config_dict['[File Lists]'][version]
         game_files_dir = config_dict['[Modding Directories]']['Game Files']
 
-        update_mod_list('lodmods.config', config_dict, (swap[1], swap[0]))
+        update_mod_list('lodmods.config', config_dict, swap)
 
         disc_dict_pair = []
-        for version in swap:
+        for version in [s for s in swap if s is not None]:
             disc_dict = {}
             for disc in config_dict['[Game Discs]'][version].keys():
                 if (disc != 'All Discs' and config_dict['[Game Discs]'][version][disc][0] != '') \
@@ -395,7 +409,7 @@ def main():
                          config_dict['[Game Discs]'][version][disc][1]]]
             disc_dict_pair.append(disc_dict)
 
-        update_file_list(list_file, config_dict, disc_dict_pair[1])
+        update_file_list(list_file, config_dict, disc_dict_pair[0])
 
         for mod, mod_val in config_dict['[Mod List]'].items():
             if not mod_val:
@@ -404,7 +418,7 @@ def main():
                 patch_list.append(file)
 
         print()
-        swap_check = read_file_list(list_file, disc_dict_pair[1], file_category='[SWAP]')
+        swap_check = read_file_list(list_file, disc_dict_pair[0], file_category='[SWAP]')
         if swap_check['[SWAP]'] and not \
                 (all([val[0] for key, val in config_dict['[Game Discs]']['JPN'].items()])
                  or config_dict['[Game Directories]']['JPN']):
@@ -412,7 +426,7 @@ def main():
                   'using a mod that swaps files.')
             sys.exit(0)
 
-        patch(list_file, disc_dict_pair, copy.deepcopy(patch_list))
+        install_mods(list_file, disc_dict_pair, deepcopy(patch_list))
 
         try:
             shutil.rmtree(game_files_dir)

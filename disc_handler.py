@@ -11,7 +11,7 @@ function to backup/restore backups of game discs and files.
 
 Copyright (C) 2019 theflyingzamboni
 """
-
+# TODO: Get backup working properly for PSXMode and CDPatch
 import os
 import shutil
 import subprocess
@@ -46,7 +46,7 @@ def _def_path(file_system_object):
                             file_system_object)
 
 
-def backup_file(input_file, restore_from_backup=False):
+def backup_file(input_file, restore_from_backup=False, hide_print=False):
     """
     Creates/restores disc image backup.
 
@@ -60,11 +60,11 @@ def backup_file(input_file, restore_from_backup=False):
     ----------
     input_file : str
         Path/name of file to be backed up/restored from backup.
-    restore_from_backup : boolean
-        Flag determining whether file should be restored from clean backup
-        (default: False).
-    print_message : boolean
-        Flag determining whether to print output (default: False).
+    restore_from_backup : bool
+        Flag determining whether file should be restored from clean backup.
+        (default: False)
+    hide_print : bool
+        Flag determining whether to hide console output. (default: False)
     """
 
     # DO NOT DELETE .orig file if .bin file has been modified
@@ -72,14 +72,16 @@ def backup_file(input_file, restore_from_backup=False):
     input_backup = ''.join((input_file, '.orig'))
 
     if not os.path.exists(input_backup):
-        print(f'Backing up {input_file}')
+        if not hide_print:
+            print(f'Backing up {input_file}')
         shutil.copy(input_file, input_backup)
     elif restore_from_backup:
-        print(f'Restoring {input_file} from backup')
+        if not hide_print:
+            print(f'Restoring {input_file} from backup')
         shutil.copy(input_backup, input_file)
 
 
-def cdpatch(disc_dict, mode='-x'):
+def cdpatch(disc_dict, mode='-x', called_by_patcher=False):
     """
     Wrapper function for extracting/inserting game files with cdpatch.exe.
 
@@ -89,18 +91,21 @@ def cdpatch(disc_dict, mode='-x'):
 
     Cdpatch is the preferred game file extractor/inserter for XA audio
     only, as it is required for that. It is unable to handle inserting
-    files of increased size, however, and this wrapper function will
-    behave unexpectedly when trying to insert files from All Discs.
+    files of increased size, however.
 
     Parameters
     ----------
     disc_dict : dict
         Dict of game disc info.
     mode : str
-        Sets mode to extract (default; -x) or insert (-i).
+        Sets mode to extract (default: -x) or insert (-i).
+    called_by_patcher : bool
+        Sets whether function was called by patcher. (default: False)
+    backup_discs : bool
+        Flag to backup/restore from backup the discs being modified.
+        (default: False)
     """
 
-    # TODO: does not insert files for All Discs
     # Loop through each disc in disc_dict and add all flagged game files
     # to a list. Once all game files have been added, replace the game
     # file dict for that disc with the file list, as cdpatch requires
@@ -134,21 +139,22 @@ def cdpatch(disc_dict, mode='-x'):
     # For each disc in disc_dict, extract/insert all game files in
     # the file list.
     cdpatch_path = _def_path('cdpatch.exe')  # Get the absolute path of cdpatch
+    sub_kwargs = (dict(stdout=subprocess.DEVNULL) if called_by_patcher else {})
     for disc, disc_val in disc_dict.items():
         try:
             if disc_val[1][1] and mode == '-x':
                 subprocess.run([cdpatch_path, mode, disc_val[0],
-                                '-f', '-o', '-d', disc_val[1][0],
-                                *disc_val[1][1]], stdout=subprocess.DEVNULL)
+                                '-f', '-o', '-v', '-d', disc_val[1][0],
+                                *disc_val[1][1]], **sub_kwargs)
             elif disc_val[1][1] and mode == '-i':
                 subprocess.run([cdpatch_path, mode, disc_val[0],
-                                '-f', '-d', disc_val[1][0],
-                                *disc_val[1][1]], stdout=subprocess.DEVNULL)
+                                '-f', '-v', '-d', disc_val[1][0],
+                                *disc_val[1][1]], **sub_kwargs)
         except FileNotFoundError:
             print('CDPatch: %s could not be found' % sys.exc_info()[1].filename)
 
 
-def psxmode(disc_dict, backup_discs=False):
+def psxmode(disc_dict, backup_discs=False, called_by_patcher=False):
     """
     Wrapper function for inserting game files with psx-mode2.exe.
 
@@ -163,8 +169,11 @@ def psxmode(disc_dict, backup_discs=False):
     ----------
     disc_dict : dict
         Dict of game disc info.
-    backup_discs : boolean
+    backup_discs : bool
         Flag to backup/restore from backup the discs being modified.
+        (default: False)
+    called_by_patcher : bool
+        Sets whether function was called by patcher. (default: False)
     """
 
     path_list = []
@@ -199,14 +208,16 @@ def psxmode(disc_dict, backup_discs=False):
 
     # For each disc in disc_dict, insert all game files in the file list.
     psxmode_path = _def_path('psx-mode2-en.exe')
+    sub_kwargs = (dict(stdout=subprocess.DEVNULL) if called_by_patcher else {})
     for disc, disc_val in disc_dict.items():
         try:
-            if not os.path.exists('.'.join((disc_val[0], 'orig'))):
+            # Does not work as expected
+            """if not os.path.exists('.'.join((disc_val[0], 'orig'))):
                 print('\nPSXMode: Creating %s backup\n' % disc)
                 backup_file(disc_val[0], backup_discs, True)
             elif backup_discs:
                 print('\nPSXMode: Restoring %s backup\n' % disc)
-                backup_file(disc_val[0], backup_discs, True)
+                backup_file(disc_val[0], backup_discs, True)"""
 
             files_to_insert = disc_val[1]
             for j, file in enumerate(files_to_insert):
@@ -220,11 +231,11 @@ def psxmode(disc_dict, backup_discs=False):
                 if 'XA' in file.upper() or 'IKI' in file.upper():
                     subprocess.run([psxmode_path, disc_val[0], file,
                                     files_to_insert[j], '-n'],
-                                   stdout=subprocess.DEVNULL)
+                                   **sub_kwargs)
                 else:
                     subprocess.run([psxmode_path, disc_val[0], file,
                                     files_to_insert[j]],
-                                   stdout=subprocess.DEVNULL)
+                                   **sub_kwargs)
 
         except FileNotFoundError:
             print('PSXMode: %s could not be found' % disc_val)

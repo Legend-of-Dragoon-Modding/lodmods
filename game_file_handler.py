@@ -217,7 +217,7 @@ def _decompress(compressed_file, start_block=0, end_block=512, is_subfile=False)
         Data block to start decompression from. (default: 0)
     end_block : int
         Data block to decompress up to (non-inclusive). (default: 512)
-    is_subfile : boolean
+    is_subfile : bool
         Flag indicating whether file is a BPE file, or a non-BPE file
         that contains BPE-compressed data within its body. (default: False)
     """
@@ -402,7 +402,7 @@ def run_decompression(compressed_file, start_block=0, end_block=512, is_subfile=
         Data block to start decompression from. (default: 0)
     end_block : int
         Data block to decompress up to (non-inclusive). (default: 512)
-    is_subfile : boolean
+    is_subfile : bool
         Flag indicating whether file is a BPE file, or a non-BPE file
         that contains BPE-compressed data within its body. (default: False)
     """
@@ -434,7 +434,7 @@ def _dummy_decompress(compressed_file, start_block=0, end_block=512, is_subfile=
         Data block to start decompression from. (default: 0)
     end_block : int
         Data block to decompress up to (non-inclusive). (default: 512)
-    is_subfile : boolean
+    is_subfile : bool
         Flag indicating whether file is a BPE file, or a non-BPE file
         that contains BPE-compressed data within its body. (default: False)
 
@@ -558,10 +558,10 @@ def _compress_block(block, comp_block_list, attempt_num, is_subfile=False,
         List of (block #, block size, compressed block) tuples.
     attempt_num : int
         Number of current compression attempt for _choose_sort().
-    is_subfile : boolean
+    is_subfile : bool
         Flag indicating whether file is a BPE file, or a non-BPE file
         that contains BPE-compressed data within its body. (default: False)
-    mod_mode : boolean
+    mod_mode : bool
         Flag indicating the file is being compressed for a mod and compressed
         size needs to be no larger than the original. (default: False)
     sort_order : int
@@ -765,10 +765,10 @@ def _compress(decompressed_file, compressed_file, attempt_num=0,
         Name of compressed file.
     attempt_num : int
         Number of current compression attempt for _choose_sort(). (default: 0)
-    mod_mode : boolean
+    mod_mode : bool
         Flag indicating the file is being compressed for a mod and compressed
         size needs to be no larger than the original. (default: False)
-    is_subfile : boolean
+    is_subfile : bool
         Flag indicating whether file is a BPE file, or a non-BPE file
         that contains BPE-compressed data within its body. (default: False)
 
@@ -948,15 +948,15 @@ def run_compression(decompressed_file, mod_mode=True, is_subfile=False,
     ----------
     decompressed_file : str
         Name of file to compress.
-    mod_mode : boolean
+    mod_mode : bool
         Flag indicating the file is being compressed for a mod and compressed
         size needs to be no larger than the original. (default: False)
-    is_subfile : boolean
+    is_subfile : bool
         Flag indicating whether file is a BPE file, or a non-BPE file
         that contains BPE-compressed data within its body. (default: False)
     max_attempts : int
         Maximum number of times to attempt to compress a file. (default: 100)
-    delete_decompressed : boolean
+    delete_decompressed : bool
         Flag indicating whether to delete decompressed file after compression.
     """
 
@@ -1075,7 +1075,7 @@ class LBATable:
 
     Attributes
     ----------
-    sector_padding : boolean
+    sector_padding : bool
         Value stating whether the MRG file uses '0x8c' sector padding.
     num_files : int
         Number of files contained in MRG file (excludes LBA); defined by
@@ -1098,7 +1098,7 @@ class LBATable:
         ----------
         source_file : BufferedReader
             MRG file that files are being extracted from/inserted into
-        sector_padding : boolean
+        sector_padding : bool
             Value stating whether the MRG file uses '0x8c' sector padding.
         """
 
@@ -1217,7 +1217,7 @@ def extract_files(source_file, sector_padding=False, files_to_extract=('*',)):
     ----------
     source_file : string
         Path and name of file that files are being extracted from.
-    sector_padding : boolean
+    sector_padding : bool
         Value stating whether the MRG file uses '0x8c' sector padding.
         Default: False
     files_to_extract : list
@@ -1311,7 +1311,7 @@ def _extraction_handler(source_file, sector_padding=False, files_to_extract=('*'
         Path and name of file that files are being extracted from. Is either
         a MRG file that files are being extracted from, or a BPE file that is
         being decompressed.
-    sector_padding : boolean
+    sector_padding : bool
         Value stating whether the MRG file uses '0x8c' sector padding.
         The negation of this variable also serves as an indication of whether
         a compressed file is a main file or a subfile within another file.
@@ -1417,13 +1417,13 @@ def insert_files(source_file, sector_padding=False, files_to_insert=('*',),
     ----------
     source_file : string
         Path and name of file that files are being inserted into.
-    sector_padding : boolean
+    sector_padding : bool
         Value stating whether the MRG file uses '0x8c' sector padding.
         Default: False
     files_to_insert : list
         List of files to insert. Default: ('*',) [all files in
         subdirectory, excluding 0 {the LBA table}]
-    del_subdir : boolean
+    del_subdir : bool
         Specifies whether to delete subdirectory containing component
         files. Default: False
     """
@@ -1536,7 +1536,7 @@ def _insert_helper(src_file, lba_table, file_nums, sector_padding,
         LBA table of src_file.
     file_nums : int list
         List of files to be inserted into src_file, by file number.
-    sector_padding : boolean
+    sector_padding : bool
         Value stating whether the MRG file uses '0x8c' sector padding.
     input_dir : string
         Subdirectory containing subfiles to be inserted into src_file.
@@ -1644,7 +1644,7 @@ def _rebuild_helper(src_file, lba_table, sector_padding, input_dir, basename):
         MRG file that is being rebuilt.
     lba_table : LBATable
         LBA table of src_file.
-    sector_padding : boolean
+    sector_padding : bool
         Value stating whether the MRG file uses '0x8c' sector padding.
     input_dir : string
         Subdirectory containing subfiles to rebuild src_file from.
@@ -1723,13 +1723,13 @@ def _insertion_handler(source_file, sector_padding=False, files_to_insert=('*',)
     ----------
     source_file : BufferedReader
         MRG file that files are being inserted into.
-    sector_padding : boolean
+    sector_padding : bool
         Value stating whether the MRG file uses '0x8c' sector padding.
         Default: False
     files_to_insert : list
         List of files to insert. Default: ('*',) [all files in
         subdirectory, excluding 0 {the LBA table}]
-    del_subdir : boolean
+    del_subdir : bool
         Specifies whether to delete subdirectory containing component
         files. Default: False
     """
@@ -1798,7 +1798,7 @@ def insert_all_from_list(list_file, disc_dict, file_category='[ALL]',
         The header category containing file entries to insert/compress into.
         Values are '[PATCH]', '[SWAP]', and '[ALL]'.
         Default: '[ALL]'
-    del_subdir : boolean
+    del_subdir : bool
         Specifies whether to delete subdirectory containing component
         files (MRG) and decompressed files (BPE). Default: False
     """
@@ -1841,9 +1841,9 @@ def unpack_all(source_file, sector_padded=False, delete_empty_files=False):
     ----------
     source_file : str
         Name of file to be unpacked.
-    sector_padded : boolean
+    sector_padded : bool
         Whether the file being unpacked is sector aligned (default: False).
-    delete_empty_files : boolean
+    delete_empty_files : bool
         Whether to delete files less than 8 bytes long (default: False).
     """
 
@@ -1931,7 +1931,7 @@ def file_swap(src_file, dst_file):
     """
 
     try:
-        backup_file(dst_file)
+        backup_file(dst_file, hide_print=True)
         shutil.copy(src_file, dst_file)
     except FileNotFoundError:
         file = sys.exc_info()[1].filename
@@ -1960,15 +1960,15 @@ def swap_all_from_list(list_file, disc_dict_pair, del_src_dir=False):
         List containing a pair of dicts (one for source version,one for
         target version) that contain information about disc image, directory
         structure, and game files
-    del_src_dir : boolean
+    del_src_dir : bool
         Specifies whether to delete subdirectories containing the source
         files for the swaps. Default: False
     """
 
     # Read [SWAP] category of file lists for both source and
     # destination game versions.
-    src_files_list = read_file_list(list_file, disc_dict_pair[0], file_category='[SWAP]')['[SWAP]']
-    dst_files_list = read_file_list(list_file, disc_dict_pair[1], file_category='[SWAP]')['[SWAP]']
+    src_files_list = read_file_list(list_file, disc_dict_pair[1], file_category='[SWAP]')['[SWAP]']
+    dst_files_list = read_file_list(list_file, disc_dict_pair[0], file_category='[SWAP]')['[SWAP]']
     files_to_swap = []
     total_files = 0
 
@@ -2012,20 +2012,20 @@ def swap_all_from_list(list_file, disc_dict_pair, del_src_dir=False):
                 total_files += 1
 
     files_swapped = 0
-    print('\nSwap: Swapping files')
+    print('\nLODModS: Swapping files')
     # Loop through src/dst pairs in files_to_swap and call file_swap() on it.
     for pair in files_to_swap:
         try:
             file_swap(pair[0], pair[1])
         except FileNotFoundError:
-            print('Swap: %s not found' % sys.exc_info()[1].filename)
+            print('LODModS: %s not found' % sys.exc_info()[1].filename)
             continue
         files_swapped += 1
-        print('Swap: Swapped %s of %s files' % (files_swapped, total_files), end='\r')
+        print('LODModS: Swapped %s of %s files' % (files_swapped, total_files), end='\r')
 
     # If del_src_dir is true, delete the directories of the source version files.
     if del_src_dir:
         for key in src_files_list.keys():
-            os.rmdir(disc_dict_pair[0][key][1][0])
+            os.rmdir(disc_dict_pair[1][key][1][0])
 
-    print(ERASE + 'Swap: Files swapped')
+    print(ERASE + 'LODModS: Files swapped')
