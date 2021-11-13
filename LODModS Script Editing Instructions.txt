@@ -1,0 +1,141 @@
+*****************************
+* SCRIPT REPLACEMENT HOW-TO *
+*      (as of v0.2.2a)      *
+*****************************
+
+Pre-Start Info
+--------------
+The basic format of all commands is "./lodmods [-c config file] command (positional arguments) [optional arguments]". Everything in [] is optional. If you do not use the [-c config file] argument, the program will use lodmods.config by default. If you would like to keep multiple config files for multiple projects, you will need to create one first (with the .config extension, not .txt or anything else). This is most easily done by just creating and renaming a copy of lodmods.config.
+
+To see what commands are available, use "./lodmods -h".
+To get information on a specific command, use "./lodmods command -h" (replacing command with the name of the desired command).
+
+Commands should be entered without quotes. Quotes are only needed for path name arguments containing whitespace.
+
+NOTE: Currently, text dumping/insertion only works on the US version of the game.
+
+Getting Started
+---------------
+1) Unzip the LODMods folder.
+2) Open the folder, hold shift+right click somewhere in the empty space to bring up the context menu and select "Open PowerShell window here" OR run the command prompt and type "cd [drive and path of LODMods here, no brackets]".
+3) Enter "./lodmods setup USA" and follow the prompts to provide basic information to lodmods.config. The program will try to identify the disc images automatically, but if there is an error, you will be prompted to enter the file names manually.
+4) Open lodmods.config in a text editor of your choice, such as Notepad or Notepad++.
+5) Go down to the line #USA under [Game Discs]. For each disc, there are several lines reading GAMEFILE=0. The value on the right can be 0 or 1, with a 1 indicating that that game file should be extracted from the disc, and 0 indicating it should not.
+For script editing, change the 0 to 1 for the lines reading OVL/BTTL.OV_, OVL/S_BTLD.OV_, OVL/S_ITEM.OV_, OVL/WMAP.OV_, SECT/DRGN0.BIN, and SECT/DRGN1.BIN under the @All Discs header. Under the @Disc 1 through 4 headers, change the 0 to 1 for the SECT/DRGN2x.BIN lines and the SCUS_94x.xx lines.
+6) Back up your disc images. This should be done using "./lodmods backup USA -d *". If you ever need to restore the clean copies from backup, use "./lodmods backup USA -d * -r".
+
+Creating Font Table
+-------------------
+7) Edit the font table texture. This can be done in a couple of ways, but the easiest is to use tim2view (https://www.romhacking.net/utilities/799/) and an image editor such as GIMP, Photoshop, or paint.net.
+	- Using tim2view, go to File>Scan File and select the disc 4 bin/iso (must be disc 4, or it will cause problems later).
+	- Scroll down to file 007312, select it, and go to Image>Export PNG, and save the file with the default name.
+	- Open the font table in your chosen image editor. Each character occupies an 8x12 pixel tile, with an 8 pixel gap between each tile horizontally. All characters must fit within this space. If using GIMP, you can go to View>Show Grid, then Image>Configure Grid, change the foreground color to something visible, change width to 8 pixels and height to 12 pixels. Be sure to unlink the dimensions first. Press OK. This will display a tile grid to make designing characters easier.
+	- Color sample the font color. It is not quite pure white, and must be that off-white color to display.
+	- Using a 1 pixel pencil, design characters as needed. Existing characters can be replaced, and new characters can be added until the table is full (technically it could be extended for 3 additional "pages", but there is no practical or convenient way to do this).
+	- LODModS supports adding one additional character set (e.g. italics). If you wish to do so, add the duplicate characters in the spaces after the last standard character on the table.
+	- Once the table is complete, export and overwrite the original PNG.
+	- Back in tim2view, with the font table selected, go to Image>Import PNG and select the font table PNG. tim2view can be closed now.
+	- NOTE: There are several other textures that have text that will need to be edited manually in a similar fashion. These will be added to the default text list in the future once they're all catalogued. In the meantime, if editing these, be sure to use only the colors in the palette, which you can find in GIMP by going to Windows>Dockable Dialogs>Colormap. This may work, although it may also result in corruption when insert the PNGs back in, depending on the image.
+8) If you don't already have it, download Notepad++ (https://notepad-plus-plus.org/downloads/).
+9) Open lod.tbl in Notepad++. To enter your own custom character set, put in one character per line, as seen in the default table. These should be entered in the order of the font texture, going left to right, top to bottom, starting with the whitespace in the upper left. Be sure to replace default characters as needed. If you wish to add an additional character set, add an extra new line after the standard characters (so that there is a one line gap), and then enter the desired characters as above.
+
+Extracting Files
+----------------
+10) Extract game files from the discs using "./lodmods cdpatch USA -d *".
+11) Unpack/decompress the game files using "./lodmods exfromlist USA".
+
+Dumping/Inserting Text
+----------------------
+12) Use "./lodmods dumpall USA" to dump the game text to CSV files in the script_dumps folder. This will create 5 separate CSVs: one for each disc, and one for text in files that are present and identical on all discs.
+13) Edit text. This can be done using any spreadsheet editor such as MS Excel or LibreOffice Calc. When editing text, all changes should be made to the "New Dialogue" column in the CSVs. Text window dimensions are adjusted automatically when inserting new text. Editing text has some caveats:
+	- [IMPORTANT] When opening a CSV file, make ABSOLUTELY CERTAIN to change the Box Dimension column data type to 'Text'. Failure to do so will result in this column being converted to numbers, which will mess up text insertion. Additionally, be careful if uploading CSVs to Google Sheets, as this can mess up the formatting. If using Sheets, it is safer to copy/paste, and the result should be visually double-checked against the original to make sure everything copied correctly.
+	- [OPTIONAL] (These instructions are for LibreOffice Calc. Other spreadsheet programs will be similar.) If you want to sort the text in a more comprehensible order for editing, the sorting CSVs included can be used.
+		- For each of the 5 CSV dumps, click on Row in the toolbar and select Freeze First Row. Then select all of the cells in the spreadsheet and click Sort in the toolbar. In order, set the sort dropdowns to File Name, Entry #. Check the Options tab and make sure "Range contains column labels" is checked, then click OK.
+		- Select columns B-J in the corresponding sorting CSV, and copy them to columns F-N in the dumped CSV.
+		- Select all cells and click Sort in the toolbar. In order, set the sort dropdowns to Area.Scene #, Event/NPC #, Event Flag #, Dialogue #. Click OK.
+	- Field text (normal dialogue when exploring maps) is limited to a character width of 36 (including whitespace, but excluding flags in <>). Dialogue that appears in cutscenes or battles is limited to a width of 28-32 (seems to vary, may depend partially on width of characters used). Cutscenes specifically have a maximum line number of 4 that can be displayed on screen at once. This holds for battle dialogue as well, but continuations are allowed using the <WWWTS> end line flag. (Just follow the original text as a guide for how many continuations are possible. It may be possible to extend this, but that is currently untested.) Menu item name and description text are limited to an 18-character width. Other menu items have different widths, so just experiment and see what does and doesn't overflow the designated areas.
+	- Individual blocks of text can be expanded or shortened in character length. A given line of text does not need to adhere to the length of the original beyond the specifications above.
+	- Total byte length (characters plus byte flags) of the text in files in DRGN0, DRGN1, and DRGN2x can be extended, whereas total length in the SCUS and OV files must be less than or equal to the original length. The program should show an error message if this length is exceeded. If you get this message, you will need to shorten the total length of text in that game file. These space reductions can be made anywhere. For S_ITEM.OV_, a lot of space savings can be had by reducing all of the 'Temporary' entries to a single whitespace character. Duplicate entries will all point to a single instance, as well, further saving some space.
+	- Each line must end in the <LINE> flag (or under certain circumstances, the <WWWTS> flag) and all text blocks must end with the <END> flag. For how to use other flags, refer to the end of this document. When in doubt, just use the flags used in the original dialogue.
+	- All characters used must be in the font table (.tbl) file, and should correspond to a character in the font table texture.
+	- If using an additional character set such as italics, the relevant text should be surrounded by curly braces {}. This will tell the program to use the alternate character set in the font table.
+14) To insert edited text back into the game, use "./lodmods insertall USA".
+
+Inserting Files
+---------------
+15) Repack/compress game files using "./lodmods infromlist USA".
+16) Insert game files back into discs using "./lodmods psxmode USA -d *". (Insertion using cdpatch has a known bug, and the program cannot insert larger files like psxmode2 can.)
+17) Test modded disc images.
+
+Text Flags
+----------
+TEXT START FLAGS
+	Typed (prints characters one at a time, higher values print slower)
+	'<START0>'
+	'<START1>'
+	'<START2>'
+	'<START3>'
+	'<START4>'
+	'<START5>'
+	'<STARTA>'
+	'<STARTF>'
+	
+	Instant (full text appears at once)
+	'<SAUTO0>'
+	'<SAUTO1>'
+	'<SAUTO2>'
+	'<SAUTO3>'
+	'<SAUTO4>'
+	'<SAUTO5>'
+	'<SAUTO9>'
+	'<SAUTOA>'
+	'<SAUTO1E>'
+	
+	Cutscene
+	'<SCUT>'
+	
+	Battle
+	'<SBAT>'
+	
+	Merchant Battle (used for elemental colored windows, but flag won't actually change colors)
+	'<FIRE>'
+	'<WATER>'
+	'<WIND>'
+	'<EARTH>'
+	'<LIGHT>'
+	'<DARK>'
+	'<THNDR>'
+	'<NELEM>'
+	'<NORM>'
+	
+TEXT END FLAGS
+	'<LINE>' (ends line)
+	'<END>' (ends text block)
+	'<WWWTS>' (ends box, but indicates continuation in next box)
+
+TEXT COLOR FLAGS
+	'<TWHITE>'
+	'<TDGRN>'
+	'<TLGRN>'
+	'<TCYAN>'
+	'<TBRWN>'
+	'<TRED>'
+	'<TMTAN>'
+	'<TLTAN>'
+	'<TYLW>'
+	'<TBLCK>'
+	'<TGRAY'
+	'<TPRPL>'
+
+TEXT VARIABLE FLAGS (used by game for number variables, like vegetables chopped count)
+	'<VAR0>'
+	'<VAR1>'
+	'<VAR2>'
+	'<VAR3>'
+	'<VAR4>'
+	'<VAR8>'
+	'<VAR9>'
+	
+Special Thanks
+--------------
+A big thank you to LoD discord member VoidWaveCEO for finding and documenting errors while creating their own script mod. I was able to fix many bugs and configuration errors thanks to their hard work.
