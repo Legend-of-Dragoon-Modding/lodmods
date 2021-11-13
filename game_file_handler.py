@@ -222,13 +222,6 @@ def _decompress(compressed_file, start_block=0, end_block=512, is_subfile=False)
         that contains BPE-compressed data within its body. (default: False)
     """
 
-    file_name = os.path.realpath(compressed_file.name)
-    basename = os.path.splitext(os.path.basename(file_name))
-    bpe_subdir = '_'.join((os.path.splitext(file_name)[0], 'dir'))
-    meta_dir = os.path.join(bpe_subdir, 'meta')
-    os.makedirs(bpe_subdir, exist_ok=True)
-    os.makedirs(meta_dir, exist_ok=True)
-
     # Make sure file is BPE, or has BPE subfile if is_subfile specified,
     # then set pointer to start of BPE file/subfile.
     if b'BPE\x1a' in compressed_file.read(8):
@@ -243,6 +236,13 @@ def _decompress(compressed_file, start_block=0, end_block=512, is_subfile=False)
         print('Decompress: Not a BPE file')
         print('Decompress: Skipping file')
         return
+
+    file_name = os.path.realpath(compressed_file.name)
+    basename = os.path.splitext(os.path.basename(file_name))
+    bpe_subdir = '_'.join((os.path.splitext(file_name)[0], 'dir'))
+    meta_dir = os.path.join(bpe_subdir, 'meta')
+    os.makedirs(bpe_subdir, exist_ok=True)
+    os.makedirs(meta_dir, exist_ok=True)
 
     decompressed_file_name = os.path.join(
         bpe_subdir,
@@ -1058,7 +1058,7 @@ def run_compression(decompressed_file, mod_mode=True, is_subfile=False,
     # Delete the temp file, and the decompressed file as well if specified.
     os.remove(temp)
     if delete_decompressed:
-        os.remove(os.path.dirname(decompressed_file))
+        shutil.rmtree(os.path.dirname(decompressed_file))
 
 
 # MRG handling and file swapping functions + integrated functions
@@ -1430,24 +1430,27 @@ def insert_files(source_file, sector_padding=False, files_to_insert=('*',),
 
     # Return if file does not exist or file size is 0.
     if not os.path.isfile(source_file):
-        print('Insert: File %s not found' % source_file)
+        print(f'Insert: File {source_file} not found')
         print('Insert: Skipping file')
         return
     elif not os.path.getsize(source_file):
-        print('Insert: %s is an empty file' % source_file)
+        print(f'Insert: {source_file} is an empty file')
         print('Insert: Skipping file')
         return
 
-    backup_file(source_file, True if files_to_insert[0] == '*' else False)
+    # TODO: Because of stuff like this, should probably always be calling
+    #  insert_all even for single files, but that's restructuring for the
+    #  C# version
+    backup_file(source_file, True if files_to_insert[0] == '*' else False, True)
     with open(source_file, 'rb+') as outf:
         # Check that file is MRG file. Return if not.
         header = outf.read(4)
         if header != b'MRG\x1a':
-            print('Insert: %s is not a MRG file' % source_file)
+            print(f'Insert: {source_file} is not a MRG file')
             print('Insert: Skipping file')
             return
 
-        print('Insert: Inserting files into %s' % source_file)
+        print(f'Insert: Inserting files into {source_file}')
 
         input_dir = '_'.join((os.path.splitext(source_file)[0], 'dir'))
         basename = os.path.splitext(os.path.basename(source_file))[0]
@@ -1474,7 +1477,7 @@ def insert_files(source_file, sector_padding=False, files_to_insert=('*',),
         # rather than _rebuild_helper. Non-existent files are left in
         # the list so that an error will print later to alert the user
         # of the issue.
-        """maybe move logic of non-existent files here"""
+        # TODO: Maybe move logic of non-existent files here
         if all_files_test == '*':
             subdir_check = sorted(
                 [int(os.path.basename(os.path.splitext(x)[0]).split('_')[-1])
@@ -1757,7 +1760,7 @@ def _insertion_handler(source_file, sector_padding=False, files_to_insert=('*',)
             or ('OV_' in source_file or 'SCUS' in source_file
                 or 'SCES' in source_file or 'SCPS' in source_file):
         # Not restoring a clean file from backup may corrupt file
-        backup_file(source_file, True)
+        backup_file(source_file, True, True)
 
         base_name = os.path.basename(source_file)
         bn_parts = os.path.splitext(base_name)
@@ -1773,7 +1776,7 @@ def _insertion_handler(source_file, sector_padding=False, files_to_insert=('*',)
             #  for compression because did not originally anticipate all the
             #  nested BPEs in DRGN0
     else:
-        print('Insert: %s is not a MRG or BPE file' % source_file)
+        print(f'Insert: {source_file} is not a MRG or BPE file')
         print('Insert: Skipping file')
 
 
@@ -1981,10 +1984,14 @@ def swap_all_from_list(list_file, disc_dict_pair, del_src_dir=False):
                                       sorted(dst_files_list[dst_disc].keys(), key=numerical_sort)):
             # If a file is not flagged as a modding target, delete the file
             # from both dictionaries
-            if not src_files_list[src_disc][src_key][1]:
-                del src_files_list[src_disc][src_key]
-                del dst_files_list[dst_disc][dst_key]
-                continue
+            for f in src_files_list[src_disc][src_key][1:][::-1]:
+                if f[1] == '0':
+                    src_files_list[src_disc][src_key].remove(f)
+                    dst_files_list[dst_disc][dst_key].remove(f)
+                    if not src_files_list[src_disc][src_key][1:]:
+                        del src_files_list[src_disc][src_key]
+                        del dst_files_list[dst_disc][dst_key]
+                    continue
 
             src_parent_dir = '_'.join((os.path.splitext(src_key)[0], 'dir'))
             src_basename = os.path.splitext(os.path.basename(src_key))[0]
@@ -1995,37 +2002,43 @@ def swap_all_from_list(list_file, disc_dict_pair, del_src_dir=False):
             # subfile names,and append the src/dst pairs to a list of files to be
             # swapped. If the the subfile number given is '^' (current file) or
             # '*' (all files), the keys themselves are appended to the list.
-            for file in src_files_list[src_disc][src_key][1:]:
-                if file[0] == '^' or file[0] == '*':
-                    file_pair = (src_key, dst_key)
-                elif 'OV_' in src_key.upper() or 'SCUS' in src_key.upper() \
-                        or 'SCES' in src_key.upper() or 'SCPS' in src_key.upper():
-                    block_range = process_block_range(file[0], src_basename)
-                    file_pair = ('.'.join((src_key, block_range)),
-                                 '.'.join((dst_key, block_range)))
-                else:
-                    file_pair = (os.path.join(
-                        src_parent_dir, ''.join((src_basename, '_', file[0], '.bin'))),
-                                 os.path.join(
-                        dst_parent_dir, ''.join((dst_basename, '_', file[0], '.bin'))))
-                files_to_swap.append(file_pair)
-                total_files += 1
+            try:
+                for file in src_files_list[src_disc][src_key][1:]:
+                    if file[0] == '^' or file[0] == '*':
+                        file_pair = (src_key, dst_key)
+                    elif 'OV_' in src_key.upper() or 'SCUS' in src_key.upper() \
+                            or 'SCES' in src_key.upper() or 'SCPS' in src_key.upper():
+                        block_range = process_block_range(file[0], src_basename)
+                        file_pair = ('.'.join((src_key, block_range)),
+                                     '.'.join((dst_key, block_range)))
+                    else:
+                        file_pair = (os.path.join(
+                            src_parent_dir, ''.join((src_basename, '_', file[0], '.bin'))),
+                                     os.path.join(
+                            dst_parent_dir, ''.join((dst_basename, '_', file[0], '.bin'))))
+                    files_to_swap.append(file_pair)
+                    total_files += 1
+            except KeyError:
+                pass
 
     files_swapped = 0
     print('\nLODModS: Swapping files')
     # Loop through src/dst pairs in files_to_swap and call file_swap() on it.
+    i = 0
     for pair in files_to_swap:
         try:
             file_swap(pair[0], pair[1])
+            if del_src_dir:
+                parent_dir = os.path.split(pair[0])[0]
+                os.remove(pair[0])
+                try:
+                    os.rmdir(parent_dir)
+                except OSError:
+                    pass
         except FileNotFoundError:
             print('LODModS: %s not found' % sys.exc_info()[1].filename)
             continue
         files_swapped += 1
         print('LODModS: Swapped %s of %s files' % (files_swapped, total_files), end='\r')
-
-    # If del_src_dir is true, delete the directories of the source version files.
-    if del_src_dir:
-        for key in src_files_list.keys():
-            os.rmdir(disc_dict_pair[1][key][1][0])
 
     print(ERASE + 'LODModS: Files swapped')

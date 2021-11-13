@@ -137,10 +137,10 @@ def build_index(dir_to_index, output_file=None):
         write_file_list(output_file, output_dict)
     else:
         for disc, disc_val in output_dict.items():
-            print(''.join(('#', disc)))
+            print(''.join(('#', disc.title())))
             for entry, entry_val in disc_val.items():
                 print(''.join((entry, '\t', str(entry_val[0]))))
-                for item in entry_val[1]:
+                for item in entry_val[1:]:
                     print(item[0] + '\t' + item[1])
                 else:
                     print()
@@ -177,6 +177,9 @@ def id_file_type(dir_to_search, file_type=None, header_pattern=None,
 
     try:
         file_type = file_type.upper()  # Raises AttributeError if None
+        if header_pattern is not None:
+            print('Use type or pattern, not both. Defaulting to type.\n')
+            header_pattern = None
         if file_type not in FILETYPE_DICT:
             raise KeyError
     except AttributeError:
@@ -319,10 +322,10 @@ def id_file_type(dir_to_search, file_type=None, header_pattern=None,
         write_file_list(output_file, output_dict)
     else:
         for disc, disc_val in output_dict.items():
-            print(''.join(('#', disc)))
+            print(''.join(('#', disc.title())))
             for entry, entry_val in disc_val.items():
                 print(''.join((entry, '\t', str(entry_val[0]))))
-                for item in entry_val[1]:
+                for item in entry_val[1:]:
                     print(item[0] + '\t' + item[1])
                 else:
                     print()

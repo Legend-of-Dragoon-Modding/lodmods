@@ -86,7 +86,7 @@ def _build_disc_dict(config_dict, version, disc_list, scripts_dir, game_files_di
                  config_dict['[Game Discs]'][version][disc][1]],
                 os.path.join(scripts_dir, disc_dir)]
         else:
-            print('lodhack: %s file name not specified in config file' % disc)
+            print('LODModS: %s file name not specified in config file' % disc)
 
     return disc_dict
 
@@ -276,8 +276,9 @@ def parse_arguments():
                                       contain the header type or hex pattern
                                       specified and outputs the file list to 
                                       either console or a text file. Currently 
-                                      known file types are DEFF, MCQ, TIM, TMD, and
-                                      TEXT. header_pattern should only be used if
+                                      known file types are BPE, CLUT, DEFF, LMB, 
+                                      MCQ, MRG, PXL, TIM, TMD, and TEXT. 
+                                      header_pattern should only be used if
                                       file_type is set to None (i.e. the file type
                                       is not known for certain yet).''',
                                       help='''Find files containing specified 
@@ -291,8 +292,8 @@ def parse_arguments():
                            metavar='', help='''Specify file type from list to
                            search for (default: None)''')
     parser_id.add_argument('-p', '--pattern', dest='header_pattern', default=None,
-                           metavar='', help='''Hex pattern to search for, e.g. 
-                           \'0c00\' (default: None)''')
+                           metavar='', help='''Hex header pattern to search for, 
+                           e.g. \'0c00\' (default: None)''')
     parser_id.add_argument('-o', '--out', dest='output_file', default=None,
                            metavar='', help='''Specify output file for text
                            locations (prints to console by default)''')
@@ -421,7 +422,7 @@ def parse_arguments():
     parser_u.add_argument('-d', '--delete', action='store_true',
                           dest='delete_empty_files', help='''Indicate 
                           whether to delete files less than 8 bytes
-                          long (default: False) (not currently working)''')
+                          long (default: False)''')
     parser_u.set_defaults(unpack_all=unpack_all)
 
     # Create subparser for swap command.
@@ -459,18 +460,20 @@ def parse_arguments():
     parser_d = subparsers.add_parser('dump',
                                      usage='''%(prog)s file csv_file 
                                      pointer_table_starts pointer_table_ends
-                                     [-s single_ptr_tables] [-v ov_text_starts]''',
+                                     single_ptr_tables [-v ov_text_starts]''',
                                      description='''Dumps the text in the input
                                      file to a CSV file using its pointer 
-                                     table(s). File may have either single (text
-                                     only) or dual pointer tables (text + text 
-                                     window size). ptr_tbl_end indicates the end
-                                     of the full pointer table, regardless of
-                                     whether it is divided into two tables. If
-                                     the file is an OV_ or main exe (e.g. SCUS)
-                                     file, the optional ov_text_starts argument
-                                     should be used as well to specify the starts
-                                     of all text blocks corresponding to the
+                                     table(s). File may have either single (1; text
+                                     only) or dual pointer tables (0; text + text 
+                                     window size). Some files may also contain
+                                     special pointers (2; BTTL.OV_ additions or 3 
+                                     or 4; certain instructional ptrs). ptr_tbl_end 
+                                     indicates the end of the full pointer table, 
+                                     regardless of whether it is divided into two 
+                                     tables. If the file is an OV_ or main exe 
+                                     (e.g. SCUS) file, the optional ov_text_starts 
+                                     argument should be used as well to specify the 
+                                     starts of all text blocks corresponding to the
                                      pointer tables. (This function is okay for
                                      testing purposes, but for modding purposes,
                                      using dumpall with a file list is STRONGLY
@@ -484,12 +487,12 @@ def parse_arguments():
                           beginning of pointer table (comma separated)''')
     parser_d.add_argument('ptr_tbl_ends', type=str, help='''Offset of 
                           ends of pointer tables (comma separated)''')
+    parser_d.add_argument('single_ptr_tbl', type=str, help='''Indicates 
+                          whether pointer tables are a single tables,
+                          double, or other.''')
 
     # optional arguments
-    parser_d.add_argument('-s', '--single', dest='single_ptr_tbl',
-                          default='0', metavar='', help='''Indicates that
-                          pointer table is a single table (default: 0)''')
-    parser_d.add_argument('-v', '--ovl', dest='ov_text_starts',
+    parser_d.add_argument('-o', '--ovl', dest='ov_text_starts',
                           default=None, metavar='', help='''Specify starting
                           offsets of text if file is .OV_ (default: None)''')
     parser_d.set_defaults(dump_text=dump_text)
@@ -535,13 +538,15 @@ def parse_arguments():
     parser_i = subparsers.add_parser('insert',
                                      usage='%(prog)s target_file csv_file '
                                      'pointer_table_starts pointer_table_ends'
-                                     '[-s single_ptr_tables] [-o ov_text_starts] '
+                                     'single_ptr_tables [-o ov_text_starts] '
                                      '[-v version]',
                                      description='''Inserts script from CSV into
                                      target .bin file and updates the pointer
-                                     table(s). File may have either one pointer 
-                                     table (text only) or dual pointer tables 
-                                     (text and text window size). ptr_tbl_ends 
+                                     table(s). File may have either single (1; text
+                                     only) or dual pointer tables (0; text + text 
+                                     window size). Some files may also contain
+                                     special pointers (2; BTTL.OV_ additions or 3 
+                                     or 4; certain instructional ptrs). ptr_tbl_ends 
                                      indicate the ends of the full pointer 
                                      tables, regardless of whether they are 
                                      divided into  two tables. (This function is 
@@ -557,11 +562,11 @@ def parse_arguments():
                           beginnings of pointer tables''')
     parser_i.add_argument('ptr_tbl_ends', type=str, help='''Offsets of 
                           ends of pointer tables''')
+    parser_i.add_argument('single_ptr_tbl', type=str, help='''Indicates 
+                          whether pointer tables are a single tables,
+                          double, or other.''')
 
     # optional arguments
-    parser_i.add_argument('-s', '--single', dest='single_ptr_tbl',
-                          default='0', metavar='', help='''Indicates that
-                          pointer tables are single tables (default: 0)''')
     parser_i.add_argument('-o', '--ovl', dest='ov_text_starts',
                           default=None, metavar='', help='''Specify starting
                           offsets of text if file is .OV_ (default: None)''')
@@ -658,15 +663,15 @@ if __name__ == '__main__':
         if args.func == 'setup':
             args.config_setup(args.config_file, config_dict, args.version_list)
         elif args.func == 'backup':
-            if args.disc[0] == '*':
+            if args.disc[0] == '*' or args.disc[0].lower() == 'all':
                 args.disc = ['Disc 1', 'Disc 2', 'Disc 3', 'Disc 4']
             else:
                 args.disc = [' '.join(('Disc', x)) for x in args.disc]
-            disc_dict = _build_disc_dict(config_dict, args.version, args.disc,
+            disc_dict = _build_disc_dict(config_dict, args.version.upper(), args.disc,
                                          scripts_dir, game_files_dir)
 
             for disc, disc_val in disc_dict.items():
-                args.file_backup(disc_val[0], args.restore_from_backup, True)
+                args.file_backup(disc_val[0], args.restore_from_backup)
         elif args.func == 'cdpatch':
             if args.disc[0] == '*':
                 disc_list_indiv = ['Disc 1', 'Disc 2', 'Disc 3', 'Disc 4']
@@ -680,6 +685,7 @@ if __name__ == '__main__':
                     disc_list_all = []
                 disc_list_indiv = [' '.join(('Disc', x)) for x in args.disc]
 
+            args.version = args.version.upper()
             disc_dict_indiv = _build_disc_dict(config_dict, args.version, disc_list_indiv,
                                                scripts_dir, game_files_dir)
             disc_dict_all = _build_disc_dict(config_dict, args.version, disc_list_all,
@@ -711,6 +717,7 @@ if __name__ == '__main__':
             if disc_dict_indiv:
                 args.cdpatch(disc_dict_indiv, args.mode)
         elif args.func == 'psxmode':
+            args.version = args.version.upper()
             if args.disc[0] == '*':
                 args.disc = ['All Discs', 'Disc 1', 'Disc 2', 'Disc 3', 'Disc 4']
             else:
@@ -737,6 +744,7 @@ if __name__ == '__main__':
             args.files_to_extract = [[x] for x in args.files_to_extract]
             args.extract_files(args.file, args.use_sector_padding, args.files_to_extract)
         elif args.func == 'exfromlist':
+            args.version = args.version.upper()
             file = config_dict['[File Lists]'][args.version]
             disc_list = list(config_dict['[Game Discs]'][args.version].keys())
             disc_dict = _build_disc_dict(config_dict, args.version, disc_list, scripts_dir,
@@ -748,6 +756,7 @@ if __name__ == '__main__':
             args.insert_files(args.file, args.use_sector_padding, args.files_to_insert,
                               args.del_component_folder)
         elif args.func == 'infromlist':
+            args.version = args.version.upper()
             file = config_dict['[File Lists]'][args.version]
             disc_list = list(config_dict['[Game Discs]'][args.version].keys())
             disc_dict = _build_disc_dict(config_dict, args.version, disc_list, scripts_dir,
@@ -761,7 +770,7 @@ if __name__ == '__main__':
             args.file_swap(args.src_file, args.dest_file)
         elif args.func == 'swapall':
             list_file = config_dict['[File Swap]'][args.swap_versions]
-            version_list = args.swap_versions.split(':')
+            version_list = reversed(args.swap_versions.split(':'))
             disc_dict_pair = []
             for version in version_list:
                 disc_list = list(config_dict['[Game Discs]'][version].keys())
@@ -776,19 +785,11 @@ if __name__ == '__main__':
                               args.header_pattern, args.output_file)
         elif args.func == 'dump':
             scripts_folder = os.path.split(args.csv_file)[0]
-            if not os.path.isdir(scripts_folder):
-                os.makedirs(scripts_folder)
+            scripts_folder = scripts_folder if scripts_folder else '.'
+            os.makedirs(scripts_folder, exist_ok=True)
             ptr_tbl_starts = [int(x, 16) for x in args.ptr_tbl_starts.split(',')]
             ptr_tbl_ends = [int(x, 16) for x in args.ptr_tbl_ends.split(',')]
-            single_ptr_tbl = []
-            for x in args.single_ptr_tbl.split(','):
-
-                if x == '1' or x.lower() == 'true':
-                    single_ptr_tbl.append(True)
-                elif x == '0' or x.lower() == 'false':
-                    single_ptr_tbl.append(False)
-                else:
-                    raise ValueError
+            single_ptr_tbl = [int(x) for x in args.single_ptr_tbl.split(',')]
             try:
                 ov_text_starts = [int(x, 16) for x in args.ov_text_starts.split(',')]
             except AttributeError:
@@ -796,6 +797,7 @@ if __name__ == '__main__':
             args.dump_text(args.file, args.csv_file, ptr_tbl_starts,
                            ptr_tbl_ends, single_ptr_tbl, ov_text_starts)
         elif args.func == 'dumpall':
+            args.version = args.version.upper()
             file = config_dict['[File Lists]'][args.version]
             if args.script_folder is None:
                 args.script_folder = scripts_dir
@@ -809,11 +811,13 @@ if __name__ == '__main__':
             single_ptr_tbl = [int(x) for x in args.single_ptr_tbl.split(',')]
             ov_text_starts = [int(x, 16) for x in args.ov_text_starts.split(',')] \
                 if args.ov_text_starts is not None else None
+            args.version = args.version.upper()
             args.insert_text(args.target_file, args.csv_file,
                              ptr_tbl_starts, ptr_tbl_ends,
-                             args.single_ptr_tbl, ov_text_starts,
+                             single_ptr_tbl, ov_text_starts,
                              args.version)
         elif args.func == 'insertall':
+            args.version = args.version.upper()
             file = config_dict['[File Lists]'][args.version]
             if args.script_folder is None:
                 args.script_folder = scripts_dir
@@ -822,14 +826,18 @@ if __name__ == '__main__':
                                          args.script_folder, game_files_dir)
             args.insert_all(file, disc_dict, args.version)
         elif args.func == 'createpatch':
+            args.version = args.version.upper()
             file = config_dict['[File Lists]'][args.version]
             disc_list = list(config_dict['[Game Discs]'][args.version].keys())
             disc_dict = _build_disc_dict(config_dict, args.version, disc_list,
                                          scripts_dir, game_files_dir)
             args.create_patches(file, game_files_dir, patch_dir, disc_dict)
         elif args.func == 'installmods':
+            args.version = args.version.upper()
+            swap = (args.version, args.swap_src.upper())
+            config_setup(args.config_file, config_dict,
+                         [v for v in swap if v is not None], True)
             list_file = config_dict['[File Lists]'][args.version]
-            swap = (args.version, args.swap_src)
 
             try:
                 update_mod_list(args.config_file, config_dict, swap)

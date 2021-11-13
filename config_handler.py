@@ -449,6 +449,7 @@ def config_setup(config_file, config_dict, version_list, called_by_patcher=False
 
     # Set up each version one at a time.
     version_required = True
+    version_list = [v.upper() for v in version_list]
     new_version_list = []
     for i, version in enumerate(version_list):
         # Add version to [Game Directories] in config_dict
@@ -545,7 +546,7 @@ def read_file_list(list_file, disc_dict, reverse=False, merge_categories=False,
                 category = line
                 file_list_dict[line] = {}
             elif line[0] == '#':
-                disc_num = line.strip('#').strip()
+                disc_num = line.strip('#').strip().title()
 
                 # Only include files from discs specified by user at runtime.
                 if disc_num in disc_list or disc_num == 'All':
@@ -632,7 +633,7 @@ def write_file_list(output_file, file_list_dict):
         for cat, cat_val in file_list_dict.items():
             f.write(''.join((cat, '\n')))
             for disc, disc_val in cat_val.items():
-                f.write(''.join(('#', disc, '\n')))
+                f.write(''.join(('#', disc.title(), '\n')))
                 for entry, entry_val in disc_val.items():
                     entry = ''.join(('@', entry))
                     f.write(''.join((entry, '\t', str(entry_val[0]), '\n')))

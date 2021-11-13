@@ -1132,8 +1132,7 @@ def insert_text(file, csv_file, ptr_tbl_starts, ptr_tbl_ends,
     ptr_tbl_ends : int list
         List of ending offsets of pointer tables in file.
     single_ptr_tbl : bool list
-        Indicates whether pointer tables are dual (text and box tables)
-        (default: (False, )).
+        Indicates whether pointer tables are dual (text and box tables).
     ov_text_starts : int list
         List of starting offsets of text blocks in OV_ files (default: None).
     version : str
@@ -1156,7 +1155,7 @@ def insert_text(file, csv_file, ptr_tbl_starts, ptr_tbl_ends,
         combat_ptrs = True if 'DRGN0' in file_key.upper() \
                               or 'DRGN1' in file_key.upper() else False
 
-    backup_file(file, True)  # Always insert to clean file.
+    backup_file(file, True, True)  # Always insert to clean file.
 
     # Read all CSV entries for file being modified into a list.
     text_list = []
@@ -1185,7 +1184,7 @@ def insert_text(file, csv_file, ptr_tbl_starts, ptr_tbl_ends,
 
         # Pop addition block parameters from pointer parameters and
         # write additions, if present in file.
-        for index, val in enumerate(single_ptr_tbl):
+        for index, val in enumerate(single_ptr_tbl[::]):
             if val == 2:
                 add_tbl_start = ptr_tbl_starts.pop(index)
                 add_tbl_end = ptr_tbl_ends.pop(index)
