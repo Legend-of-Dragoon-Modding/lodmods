@@ -840,7 +840,9 @@ if __name__ == '__main__':
             list_file = config_dict['[File Lists]'][args.version]
 
             try:
-                update_mod_list(args.config_file, config_dict, swap)
+                mods_found = update_mod_list(args.config_file, config_dict, swap)
+                if not mods_found:
+                    sys.exit()
 
                 disc_dict_pair = []
                 for version in [s for s in swap if s is not None]:

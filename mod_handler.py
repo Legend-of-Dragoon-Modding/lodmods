@@ -43,6 +43,11 @@ def update_mod_list(config_file, config_dict, version_list):
         Config dict object read from config file.
     version_list : str list
         List of game versions in config file (currently only USA and JPN).
+
+    Returns
+    -------
+    bool
+        Returns whether mods were found.
     """
 
     config_dict['[Mod List]'] = {}
@@ -53,7 +58,7 @@ def update_mod_list(config_file, config_dict, version_list):
         if not config_dict['[Mod List]']:
             print('LODMods: No mods found. Make sure to unzip '
                   'all mods and move them to the "mods" folder.')
-            return
+            return False
 
     available_mods = list(config_dict['[Mod List]'].keys())
     swap_required = []
@@ -98,6 +103,8 @@ def update_mod_list(config_file, config_dict, version_list):
         config_dict['[Mod List]'][available_mods[num - 1]] = 1
 
     update_config(config_file, config_dict)
+
+    return True
 
 
 def create_patches(list_file, game_files_dir, patch_dir, disc_dict):
@@ -389,7 +396,9 @@ def main():
         list_file = config_dict['[File Lists]'][version]
         game_files_dir = config_dict['[Modding Directories]']['Game Files']
 
-        update_mod_list('lodmods.config', config_dict, swap)
+        mods_found = update_mod_list('lodmods.config', config_dict, swap)
+        if not mods_found:
+            return
 
         disc_dict_pair = []
         for version in [s for s in swap if s is not None]:
