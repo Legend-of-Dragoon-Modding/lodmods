@@ -834,7 +834,9 @@ if __name__ == '__main__':
             args.create_patches(file, game_files_dir, patch_dir, disc_dict)
         elif args.func == 'installmods':
             args.version = args.version.upper()
-            swap = (args.version, args.swap_src.upper())
+            if args.swap_src is not None:
+                args.swap_src = args.swap_src.upper()
+            swap = (args.version, args.swap_src)
             config_setup(args.config_file, config_dict,
                          [v for v in swap if v is not None], True)
             list_file = config_dict['[File Lists]'][args.version]
